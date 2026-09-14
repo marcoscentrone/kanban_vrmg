@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// ============================================================================
+// REGRAS DO AMBIENTE DE TESTE (projeto "kanbanvr")
+// ----------------------------------------------------------------------------
+// Cole este conteudo em: Firebase Console > Firestore Database > Regras.
+//
+// ATENCAO: estas regras liberam leitura e escrita para QUALQUER pessoa que
+// conheca o projeto. Servem apenas para testar o quadro isoladamente, sem
+// login. NAO use isto no Firebase da VR Software.
+//
+// Quando o Firebase Authentication entrar (integracao com o portal), troque
+// a linha `allow read, write: if true;` por:
+//     allow read, write: if request.auth != null;
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Colecao do quadro. Nenhuma outra colecao e liberada.
+    match /kanban_cards/{cardId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,448 @@
+/* ==========================================================================
+   Quadro de Fluxo - VR Software (Unidade Minas Gerais)
+   --------------------------------------------------------------------------
+   Identidade visual extraida do site oficial (vrsoft.com.br/solucoes):
+   variaveis globais do tema -> laranja #FF7200 como cor primaria, cinzas
+   neutros e fonte Montserrat em tudo.
+   ========================================================================== */
+
+:root{
+  /* marca */
+  --vr-orange:       #FF7200;   /* primaria */
+  --vr-orange-dark:  #D27229;   /* hover / pressionado */
+  --vr-amber:        #FF9E01;   /* destaque secundario */
+
+  /* neutros */
+  --vr-black:        #0F0B06;   /* titulos */
+  --vr-graphite:     #2E2C2B;   /* cabecalhos de coluna */
+  --vr-gray-dark:    #4D4D4D;   /* secundaria */
+  --vr-text:         #7A7A7A;   /* texto de apoio */
+  --vr-gray:         #BCBCBC;   /* bordas */
+  --vr-gray-light:   #E8E8E8;   /* bordas suaves */
+  --vr-surface:      #F3F3F3;   /* fundo das colunas */
+  --vr-white:        #FFFFFF;
+
+  /* semanticas */
+  --live-green:      #61CE70;
+  --danger:          #DC3545;
+
+  --orange-tint:     rgba(255,114,0,0.10);
+  --orange-tint-2:   rgba(255,114,0,0.28);
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:'Montserrat',sans-serif;
+  color:var(--vr-black);
+  min-height:100vh;
+  background:var(--vr-white);
+}
+
+.board-shell{
+  background:var(--vr-white);
+  padding:28px 24px 60px;
+  min-height:100vh;
+}
+
+/* ---------- Topo ---------- */
+.topbar{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:16px;
+  margin-bottom:20px;
+  border-bottom:3px solid var(--vr-orange);
+  padding-bottom:16px;
+}
+
+.topbar h1{
+  font-weight:700;
+  font-size:30px;
+  margin:0;
+  letter-spacing:-0.3px;
+  color:var(--vr-black);
+}
+.topbar h1 span{color:var(--vr-orange);}
+
+.topbar p{
+  margin:5px 0 0;
+  color:var(--vr-text);
+  font-size:13.5px;
+  font-weight:500;
+}
+
+.actions-row{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.who{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.who label{font-size:12px;color:var(--vr-gray-dark);font-weight:600;}
+.who input, .who select{
+  font-family:'Montserrat',sans-serif;
+  font-size:13.5px;
+  padding:8px 10px;
+  border:1.5px solid var(--vr-gray);
+  border-radius:6px;
+  background:var(--vr-white);
+  color:var(--vr-black);
+}
+.who input{width:150px;}
+.who input:focus, .who select:focus{
+  outline:none;
+  border-color:var(--vr-orange);
+  box-shadow:0 0 0 3px var(--orange-tint);
+}
+
+button{font-family:'Montserrat',sans-serif; cursor:pointer;}
+
+.btn-primary{
+  background:var(--vr-orange);
+  color:var(--vr-white);
+  border:none;
+  padding:9px 18px;
+  border-radius:6px;
+  font-size:13.5px;
+  font-weight:700;
+  letter-spacing:0.2px;
+}
+.btn-primary:hover{background:var(--vr-orange-dark);}
+.btn-primary:disabled{opacity:0.6; cursor:default;}
+
+.btn-ghost{
+  background:transparent;
+  border:1.5px solid var(--vr-gray-dark);
+  color:var(--vr-gray-dark);
+  padding:8px 14px;
+  border-radius:6px;
+  font-size:13px;
+  font-weight:600;
+}
+.btn-ghost:hover{background:var(--vr-surface);}
+
+/* Indicador de conexao em tempo real. Substitui o antigo botao "Atualizar":
+   com onSnapshot o quadro se atualiza sozinho, sem recarregar. */
+.live-badge{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  font-size:12px;
+  font-weight:600;
+  color:var(--vr-gray-dark);
+  border:1.5px solid var(--vr-gray-light);
+  background:var(--vr-surface);
+  border-radius:6px;
+  padding:8px 11px;
+  white-space:nowrap;
+}
+.live-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--vr-gray);
+  flex-shrink:0;
+}
+.live-badge.on .live-dot{background:var(--live-green); animation:pulse 2s ease-in-out infinite;}
+.live-badge.off .live-dot{background:var(--danger); animation:none;}
+@keyframes pulse{0%,100%{opacity:1;} 50%{opacity:0.35;}}
+
+.status-line{
+  font-size:12px;
+  color:var(--vr-text);
+  margin-bottom:14px;
+  min-height:16px;
+}
+.status-line.error{color:var(--danger); font-weight:600;}
+
+/* ---------- Colunas ---------- */
+/* Cada coluna tem largura entre --col-min e --col-max. Em tela larga elas
+   crescem ate o maximo; ao estreitar a janela, primeiro encolhem ate o minimo
+   e depois QUEBRAM para a linha de baixo (flex-wrap), mantendo a sequencia
+   Demanda -> ... -> Finalizado. Nao ha rolagem horizontal.
+   O grupo "Teste" (2 colunas) recebe flex-basis/max-width proporcionais via
+   kanban.js, para que suas colunas fiquem iguais as demais. */
+:root{
+  --col-min: 260px;
+  --col-max: 300px;
+  --col-gap: 16px;
+}
+
+.groups{
+  display:flex;
+  flex-wrap:wrap;
+  gap:var(--col-gap);
+  align-items:flex-start;
+  padding-bottom:10px;
+}
+
+.group{flex:1 1 var(--col-min); max-width:var(--col-max);}
+.group-label{
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  text-align:center;
+  color:var(--vr-orange);
+  margin-bottom:6px;
+  visibility:hidden;
+  height:14px;
+}
+.group-label.show{visibility:visible;}
+
+.group-cols{display:flex; gap:var(--col-gap);}
+
+.column{
+  flex:1 1 0;
+  min-width:0;
+  background:var(--vr-surface);
+  border-radius:8px;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  min-height:120px;
+  border:1px solid var(--vr-gray-light);
+}
+.column.drop-hover{
+  outline:2px dashed var(--vr-orange);
+  outline-offset:-2px;
+  background:var(--orange-tint);
+}
+
+.col-header{
+  background:var(--vr-graphite);
+  color:var(--vr-white);
+  padding:9px 12px;
+  border-radius:6px;
+  border-bottom:3px solid var(--vr-orange);
+  font-weight:700;
+  font-size:13.5px;
+  letter-spacing:0.2px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:10px;
+}
+.col-count{
+  font-weight:700;
+  font-size:11px;
+  background:var(--vr-orange);
+  color:var(--vr-white);
+  padding:2px 8px;
+  border-radius:10px;
+}
+
+.card-list{display:flex; flex-direction:column; gap:9px; min-height:40px;}
+
+.col-empty{
+  font-size:12px;
+  color:var(--vr-text);
+  opacity:0.8;
+  text-align:center;
+  padding:12px 4px;
+}
+
+/* ---------- Cards ---------- */
+.task-card{
+  background:var(--vr-white);
+  border:1px solid var(--vr-gray-light);
+  border-left:4px solid var(--vr-gray);
+  border-radius:6px;
+  padding:10px 11px;
+  font-size:13px;
+  box-shadow:0 1px 3px rgba(0,0,0,0.06);
+  cursor:grab;
+  transition:box-shadow .15s;
+}
+.task-card:hover{box-shadow:0 3px 8px rgba(0,0,0,0.10);}
+.task-card:active{cursor:grabbing;}
+.task-card.dragging{opacity:0.4;}
+.task-card.p-alta{border-left-color:var(--vr-orange);}
+.task-card.p-media{border-left-color:var(--vr-amber);}
+.task-card.p-baixa{border-left-color:var(--vr-gray);}
+
+.task-title{font-weight:600; margin-bottom:4px; word-break:break-word; color:var(--vr-black);}
+.task-desc{color:var(--vr-text); font-size:12px; margin-bottom:8px; word-break:break-word; white-space:pre-wrap;}
+
+.task-tags{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;}
+.tag-dept{
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.5px;
+  text-transform:uppercase;
+  color:var(--vr-orange-dark);
+  background:var(--orange-tint);
+  border:1px solid var(--orange-tint-2);
+  padding:2px 7px;
+  border-radius:4px;
+}
+
+/* Projecao de datas (inicio -> termino previstos) */
+.task-dates{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  font-size:11px;
+  font-weight:600;
+  color:var(--vr-gray-dark);
+  background:var(--vr-surface);
+  border-radius:4px;
+  padding:4px 7px;
+  margin-bottom:8px;
+  white-space:nowrap;
+}
+.task-dates .arrow{color:var(--vr-gray);}
+.task-dates.atrasada{
+  color:var(--danger);
+  background:rgba(220,53,69,0.08);
+}
+.task-dates.hoje{
+  color:var(--vr-orange-dark);
+  background:var(--orange-tint);
+}
+
+.task-meta{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.meta-left{display:flex; align-items:center; gap:7px; min-width:0;}
+.meta-date{font-size:10.5px; color:var(--vr-text); white-space:nowrap; font-weight:500;}
+
+.avatar{
+  width:22px;height:22px;border-radius:50%;
+  background:var(--vr-graphite);
+  color:var(--vr-white);
+  font-size:10px;
+  font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.avatar.vazio{background:var(--vr-gray-light); color:var(--vr-text);}
+
+.task-buttons{display:flex; gap:4px;}
+.icon-btn{
+  border:none;background:transparent;
+  font-size:13px;
+  padding:2px 5px;
+  border-radius:4px;
+  color:var(--vr-text);
+}
+.icon-btn:hover{background:var(--orange-tint); color:var(--vr-orange-dark);}
+.icon-btn:disabled{opacity:0.25; cursor:default;}
+.icon-btn:disabled:hover{background:transparent; color:var(--vr-text);}
+
+.add-card-btn{
+  margin-top:8px;
+  background:transparent;
+  border:1.5px dashed var(--vr-gray);
+  color:var(--vr-gray-dark);
+  font-size:12.5px;
+  font-weight:600;
+  padding:7px;
+  border-radius:6px;
+}
+.add-card-btn:hover{
+  border-color:var(--vr-orange);
+  color:var(--vr-orange-dark);
+  background:var(--orange-tint);
+}
+
+/* ---------- Modal ---------- */
+.overlay{
+  position:fixed; inset:0;
+  background:rgba(15,11,6,0.55);
+  display:none;
+  align-items:center; justify-content:center;
+  z-index:100;
+  padding:16px;
+}
+.overlay.show{display:flex;}
+.modal{
+  background:var(--vr-white);
+  border-radius:8px;
+  padding:22px;
+  width:100%;
+  max-width:380px;
+  border-top:4px solid var(--vr-orange);
+  box-shadow:0 12px 32px rgba(0,0,0,0.18);
+  max-height:92vh;
+  overflow-y:auto;
+}
+.modal h2{
+  margin:0 0 14px;
+  font-size:18px;
+  font-weight:700;
+  color:var(--vr-black);
+}
+.field{margin-bottom:12px;}
+.field label{
+  display:block;
+  font-size:11.5px;
+  color:var(--vr-gray-dark);
+  margin-bottom:4px;
+  font-weight:600;
+}
+.field input, .field textarea, .field select{
+  width:100%;
+  padding:8px 10px;
+  border:1.5px solid var(--vr-gray);
+  border-radius:6px;
+  font-family:'Montserrat',sans-serif;
+  font-size:13.5px;
+  background:var(--vr-white);
+  color:var(--vr-black);
+}
+.field input:focus, .field textarea:focus, .field select:focus{
+  outline:none;
+  border-color:var(--vr-orange);
+  box-shadow:0 0 0 3px var(--orange-tint);
+}
+.field textarea{resize:vertical; min-height:60px;}
+.field input[type="date"]{min-width:0;}
+
+.field-row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.field-row .field{margin-bottom:4px;}
+.field-hint{
+  margin:0 0 12px;
+  font-size:11px;
+  color:var(--vr-text);
+}
+.modal-actions{
+  display:flex;
+  justify-content:space-between;
+  margin-top:16px;
+  align-items:center;
+  gap:8px;
+}
+.link-btn{
+  background:none;border:none;color:var(--danger);
+  font-size:12.5px; font-weight:600; text-decoration:underline; padding:0;
+}
+.modal-error{
+  color:var(--danger);
+  font-size:12px;
+  font-weight:600;
+  min-height:15px;
+  margin-top:-4px;
+}
+
+/* ---------- Responsivo ---------- */
+@media (max-width:640px){
+  .board-shell{padding:20px 14px 48px;}
+  .topbar h1{font-size:24px;}
+  /* celular: uma coluna por linha, grupo "Teste" tambem empilha */
+  .group{flex:1 1 100% !important; max-width:none !important;}
+  .group-cols{flex-wrap:wrap;}
+  .column{flex:1 1 100%;}
+}

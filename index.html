@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quadro de Fluxo — VR Software Minas</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/kanban.css">
+</head>
+<body>
+
+<div class="board-shell">
+
+  <div class="topbar">
+    <div>
+      <h1>Quadro de <span>Fluxo</span></h1>
+      <p>VR Software — Unidade Minas Gerais · quadro compartilhado da equipe</p>
+    </div>
+
+    <div class="actions-row">
+      <div class="who">
+        <label for="filtroDepartamento">Departamento:</label>
+        <select id="filtroDepartamento">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="who">
+        <label for="userName">Você é:</label>
+        <input id="userName" placeholder="seu nome" maxlength="20" autocomplete="off">
+      </div>
+
+      <div class="live-badge" id="liveBadge">
+        <span class="live-dot"></span>
+        <span id="liveText">conectando…</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-line" id="statusLine">Carregando quadro…</div>
+
+  <div class="groups" id="groups"></div>
+
+</div>
+
+<!-- Modal de criação / edição de tarefa -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h2 id="modalTitle">Nova tarefa</h2>
+
+    <div class="field">
+      <label for="fTitle">Título</label>
+      <input id="fTitle" maxlength="80" placeholder="Ex: Ajustar layout do menu" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label for="fDesc">Descrição (opcional)</label>
+      <textarea id="fDesc" maxlength="500" placeholder="Detalhes da tarefa…"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="fDepartamento">Departamento</label>
+      <select id="fDepartamento"></select>
+    </div>
+
+    <div class="field">
+      <label for="fAssignee">Responsável</label>
+      <input id="fAssignee" maxlength="20" placeholder="Nome" autocomplete="off">
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="fInicio">Início previsto</label>
+        <input id="fInicio" type="date">
+      </div>
+      <div class="field">
+        <label for="fFim">Término previsto</label>
+        <input id="fFim" type="date">
+      </div>
+    </div>
+    <p class="field-hint">Datas de projeção — quando a tarefa deve começar e terminar.</p>
+
+    <div class="field">
+      <label for="fPriority">Prioridade</label>
+      <select id="fPriority">
+        <option value="baixa">Baixa</option>
+        <option value="media" selected>Média</option>
+        <option value="alta">Alta</option>
+      </select>
+    </div>
+
+    <div class="modal-error" id="modalError"></div>
+
+    <div class="modal-actions">
+      <button class="link-btn" id="deleteBtn" style="display:none;">Excluir tarefa</button>
+      <div style="display:flex; gap:8px; margin-left:auto;">
+        <button class="btn-ghost" id="cancelBtn">Cancelar</button>
+        <button class="btn-primary" id="saveBtn">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/kanban.js"></script>
+</body>
+</html>
