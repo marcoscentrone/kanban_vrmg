@@ -17,7 +17,11 @@
    ========================================================================== */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 // --- Projeto de TESTE (kanbanvr) -----------------------------------------
 export const firebaseConfig = {
@@ -40,4 +44,20 @@ export const COLECAO_CARDS = "kanban_cards";
 export const AMBIENTE = "teste";
 
 export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
+// initializeFirestore (em vez de getFirestore) para ajustar duas coisas que
+// pesam muito na velocidade percebida dentro da rede da empresa:
+//
+// 1. localCache persistente (IndexedDB): o quadro abre na hora com os dados da
+//    ultima visita e sincroniza em segundo plano, em vez de ficar em branco
+//    esperando a rede. persistentMultipleTabManager permite varias abas abertas
+//    compartilhando o mesmo cache - util porque testamos com 2 abas.
+//
+// 2. experimentalAutoDetectLongPolling: o canal de tempo real do Firestore usa
+//    WebChannel/streaming, que proxies e firewalls corporativos costumam
+//    segurar. Com isto o SDK detecta o bloqueio e cai para long-polling sozinho,
+//    em vez de ficar tentando e dando a impressao de lentidao.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  experimentalAutoDetectLongPolling: true
+});

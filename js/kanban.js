@@ -53,11 +53,16 @@ const DEPARTAMENTOS = [
 const PRIORIDADES = ["baixa", "media", "alta"];
 const CHAVE_NOME = "kanban-user-name";
 
-// Espacamento entre cards na ordenacao. Ao soltar um card entre outros dois,
-// a nova ordem e a media das duas vizinhas - assim so 1 documento e gravado
-// por movimento, em vez de reescrever a coluna inteira.
-const PASSO_ORDEM = 1000;
-const GAP_MINIMO = 0.0005; // abaixo disso, renormaliza a coluna
+// Retencao das tarefas concluidas: uma tarefa fica 30 dias em "Finalizado" e,
+// depois disso, qualquer pessoa pode remove-la pelo botao "Limpar concluídas".
+// Nada e apagado sozinho - a exclusao e sempre uma acao de alguem.
+const COLUNA_FINAL = "finalizado";
+
+// Janela em que uma tarefa comeca a "esquentar" pela proximidade da data:
+// a 14 dias do termino ela sai do verde e caminha para o vermelho.
+const JANELA_ALERTA_DIAS = 14;
+const DIAS_RETENCAO = 30;
+const MS_POR_DIA = 86400000;
 
 /* --------------------------------------------------------------------------
    2. Estado local (espelho do Firestore, alimentado pelo onSnapshot)
@@ -140,11 +145,64 @@ function cardPorId(id) {
   return cards.find((c) => c.id === id) || null;
 }
 
-// Cards de uma coluna, ja na ordem de exibicao.
+/* ---- Retencao das tarefas finalizadas ---------------------------------- */
+
+// Momento em que a tarefa entrou em "Finalizado". Cards antigos, criados antes
+// deste campo existir, caem no atualizadoEm - que para uma tarefa concluida e,
+// na pratica, quando ela foi movida para la.
+function finalizadaEm(card) {
+  const ts = card.finalizadoEm || card.atualizadoEm;
+  return ts && typeof ts.toDate === "function" ? ts.toDate() : null;
+}
+
+// Dias que ainda faltam para a tarefa poder ser removida (0 = ja liberada,
+// null = sem data conhecida, entao nunca expira sozinha).
+function diasRestantes(card) {
+  const d = finalizadaEm(card);
+  if (!d) return null;
+  const decorridos = (Date.now() - d.getTime()) / MS_POR_DIA;
+  return Math.max(0, Math.ceil(DIAS_RETENCAO - decorridos));
+}
+
+function expirada(card) {
+  return card.coluna === COLUNA_FINAL && diasRestantes(card) === 0;
+}
+
+function cardsExpirados() {
+  return cards.filter(expirada);
+}
+
+// Cards de uma coluna, sempre na mesma ordem: os mais perto de vencer no topo,
+// os folgados abaixo, e os SEM data de termino sempre por ultimo. Nao existe
+// ordem manual - a posicao e consequencia do prazo, e se reorganiza sozinha
+// quando alguem edita uma data ou o dia vira.
 function cardsDaColuna(colunaId) {
+  const col = { id: colunaId };
   return cards
     .filter((c) => c.coluna === colunaId)
-    .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+    .sort((a, b) => {
+      const pa = progressoPrazo(a, col);
+      const pb = progressoPrazo(b, col);
+
+      // Sem data de termino: vai para o fim da coluna, mais antigas primeiro.
+      if (pa === null && pb === null) return porCriacao(a, b);
+      if (pa === null) return 1;
+      if (pb === null) return -1;
+
+      if (pb !== pa) return pb - pa;                  // maior urgencia no topo
+      if (a.fimPrevisto !== b.fimPrevisto) {          // empate: data mais proxima
+        return a.fimPrevisto < b.fimPrevisto ? -1 : 1;
+      }
+      return porCriacao(a, b);
+    });
+}
+
+// criadoEm pode ser null no instante entre criar o card e o servidor confirmar;
+// nesse caso o card fica no fim, onde acabou de nascer.
+function porCriacao(a, b) {
+  const ta = a.criadoEm?.toMillis?.() ?? Infinity;
+  const tb = b.criadoEm?.toMillis?.() ?? Infinity;
+  return ta - tb;
 }
 
 function cardsVisiveis(colunaId) {
@@ -153,25 +211,40 @@ function cardsVisiveis(colunaId) {
   return lista.filter((c) => (c.departamento || "") === filtroDepartamento);
 }
 
-function ordemNoFim(colunaId) {
-  const lista = cardsDaColuna(colunaId);
-  if (!lista.length) return PASSO_ORDEM;
-  return (lista[lista.length - 1].ordem ?? 0) + PASSO_ORDEM;
-}
 
 /* --------------------------------------------------------------------------
    5. Leitura em tempo real (onSnapshot)
    -------------------------------------------------------------------------- */
 
+let t0Conexao = 0;
+let primeiroSnapshotServidor = false;
+
 function escutarQuadro() {
   setStatus("Carregando quadro…");
   setLive(false, "conectando…");
+  t0Conexao = performance.now();
+
+  // Rede corporativa costuma levar alguns segundos para abrir o canal de tempo
+  // real. So depois de 20s sem nenhuma resposta do servidor o aviso aparece.
+  setTimeout(() => {
+    if (!primeiroSnapshotServidor) {
+      setLive(false, "sem conexão");
+      setStatus(
+        "Sem resposta do servidor. Confira se o Firestore está criado no projeto " +
+          "e se as regras permitem leitura (F12 → Console mostra o erro exato).",
+        true
+      );
+    }
+  }, 20000);
 
   // Sem orderBy no servidor de proposito: a ordenacao e feita no cliente por
-  // `ordem`. Assim nenhum card some caso um documento antigo nao tenha o campo,
-  // e nao e preciso criar indice composto no Firestore.
+  // urgencia (prazo de termino). Assim nao e preciso indice composto no Firestore
   onSnapshot(
     cardsRef,
+    // includeMetadataChanges: sem isto, quando os dados do servidor sao iguais
+    // aos do cache o callback nao dispara de novo - e o indicador ficaria preso
+    // em "sem conexao" mesmo com o quadro ja sincronizado.
+    { includeMetadataChanges: true },
     (snap) => {
       cards = snap.docs.map((d) => {
         // serverTimestamps:"estimate" evita criadoEm nulo no instante em que o
@@ -185,21 +258,39 @@ function escutarQuadro() {
           departamento: dados.departamento || "",
           responsavel: dados.responsavel || "",
           prioridade: PRIORIDADES.includes(dados.prioridade) ? dados.prioridade : "media",
-          ordem: typeof dados.ordem === "number" ? dados.ordem : 0,
           inicioPrevisto: typeof dados.inicioPrevisto === "string" ? dados.inicioPrevisto : "",
           fimPrevisto: typeof dados.fimPrevisto === "string" ? dados.fimPrevisto : "",
+          finalizadoEm: dados.finalizadoEm || null,
           criadoEm: dados.criadoEm || null,
           atualizadoEm: dados.atualizadoEm || null
         };
       });
 
-      const origem = snap.metadata.hasPendingWrites ? "salvando…" : "ao vivo";
-      setLive(true, origem);
+      // fromCache = o snapshot veio do cache local, NAO do servidor. Acontece
+      // no primeiro instante e sempre que a conexao cai. Sem distinguir isso o
+      // quadro diria "ao vivo" mesmo estando desconectado.
+      const doCache = snap.metadata.fromCache;
+      const pendente = snap.metadata.hasPendingWrites;
+
+      if (doCache) {
+        setLive(false, "sem conexão");
+      } else {
+        if (!primeiroSnapshotServidor) {
+          primeiroSnapshotServidor = true;
+          console.info(
+            `[kanban] conectado ao Firestore em ${Math.round(performance.now() - t0Conexao)}ms`
+          );
+        }
+        setLive(true, pendente ? "salvando…" : "ao vivo");
+      }
 
       const total = cards.length;
+      const sufixo = AMBIENTE === "teste" ? " · ambiente de teste (projeto kanbanvr)" : "";
       setStatus(
-        `${total} ${total === 1 ? "tarefa" : "tarefas"} no quadro — atualização automática ativa` +
-          (AMBIENTE === "teste" ? " · ambiente de teste (projeto kanbanvr)" : "")
+        doCache
+          ? `${total} ${total === 1 ? "tarefa" : "tarefas"} — dados locais, sincronizando com o servidor…`
+          : `${total} ${total === 1 ? "tarefa" : "tarefas"} no quadro — atualização automática ativa${sufixo}`,
+        doCache
       );
 
       render();
@@ -272,8 +363,10 @@ function renderColuna(col) {
   const header = document.createElement("div");
   header.className = "col-header";
   header.innerHTML =
-    `<span>${escapeHtml(col.titulo)}</span>` +
+    `<button class="add-btn" title="Nova tarefa em ${escapeHtml(col.titulo)}" aria-label="Nova tarefa em ${escapeHtml(col.titulo)}">+</button>` +
+    `<span class="col-title">${escapeHtml(col.titulo)}</span>` +
     `<span class="col-count">${visiveis.length}</span>`;
+  header.querySelector(".add-btn").onclick = () => abrirModal(col.id, null);
   colDiv.appendChild(header);
 
   const list = document.createElement("div");
@@ -291,11 +384,7 @@ function renderColuna(col) {
 
   colDiv.appendChild(list);
 
-  const addBtn = document.createElement("button");
-  addBtn.className = "add-card-btn";
-  addBtn.textContent = "+ adicionar tarefa";
-  addBtn.onclick = () => abrirModal(col.id, null);
-  colDiv.appendChild(addBtn);
+  renderBotaoLimpeza(colDiv, col);
 
   // --- alvo de drop -------------------------------------------------------
   colDiv.addEventListener("dragover", (e) => {
@@ -313,7 +402,7 @@ function renderColuna(col) {
     const cardId = arrastando || e.dataTransfer.getData("text/plain");
     arrastando = null;
     if (!cardId) return;
-    await soltarCard(cardId, col.id, list, e.clientY);
+    await soltarCard(cardId, col.id);
   });
 
   return colDiv;
@@ -328,12 +417,14 @@ function renderCard(col, card) {
   const indiceCol = COLUNAS.findIndex((c) => c.id === col.id);
 
   div.innerHTML = `
+    ${renderBolinha(card, col)}
     <div class="task-title">${escapeHtml(card.titulo)}</div>
     ${card.descricao ? `<div class="task-desc">${escapeHtml(card.descricao)}</div>` : ""}
     ${card.departamento
       ? `<div class="task-tags"><span class="tag-dept">${escapeHtml(card.departamento)}</span></div>`
       : ""}
     ${renderDatas(card, col)}
+    ${renderRetencao(card, col)}
     <div class="task-meta">
       <div class="meta-left">
         <div class="avatar ${card.responsavel ? "" : "vazio"}" title="${escapeHtml(card.responsavel || "sem responsável")}">${escapeHtml(iniciais(card.responsavel))}</div>
@@ -365,6 +456,55 @@ function renderCard(col, card) {
   return div;
 }
 
+// Quao perto a tarefa esta do termino previsto, de 0 (recem-comecada) a 1
+// (no prazo final ou vencida). Retorna null quando nao da para medir.
+function progressoPrazo(card, col) {
+  // Tarefa concluida nao tem "proximidade do fim" - ela ja acabou.
+  if (col.id === COLUNA_FINAL || !card.fimPrevisto) return null;
+
+  const hoje = new Date(hojeISO() + "T00:00:00");
+  const fim = new Date(card.fimPrevisto + "T00:00:00");
+  if (hoje >= fim) return 1; // venceu hoje ou ja passou
+
+  // (a) Proximidade no calendario: quanto falta para a data, sem olhar o
+  //     tamanho do prazo. Vence amanha = quase 1, mesmo que tenha comecado hoje.
+  const diasAteFim = (fim - hoje) / MS_POR_DIA;
+  const porCalendario = Math.min(1, Math.max(0, 1 - diasAteFim / JANELA_ALERTA_DIAS));
+
+  // (b) Fatia do prazo ja consumida, quando ha inicio previsto. Uma tarefa de
+  //     6 meses com 90% do tempo gasto ja merece atencao, ainda que a data
+  //     final esteja longe.
+  let porPrazo = 0;
+  if (card.inicioPrevisto && card.inicioPrevisto < card.fimPrevisto) {
+    const ini = new Date(card.inicioPrevisto + "T00:00:00");
+    porPrazo = Math.min(1, Math.max(0, (hoje - ini) / (fim - ini)));
+  }
+
+  // Vale o pior dos dois criterios: o que estiver mais perto do vermelho.
+  return Math.max(porCalendario, porPrazo);
+}
+
+// Bolinha no canto superior direito. A cor percorre o circulo HSL de 120 (verde)
+// ate 0 (vermelho), passando por 60 (amarelo) na metade do prazo.
+function renderBolinha(card, col) {
+  const p = progressoPrazo(card, col);
+  if (p === null) return "";
+
+  const hue = Math.round(120 * (1 - p));
+  const cor = `hsl(${hue}, 68%, ${p >= 1 ? 45 : 40}%)`;
+
+  const fim = new Date(card.fimPrevisto + "T00:00:00");
+  const hoje = new Date(hojeISO() + "T00:00:00");
+  const dias = Math.round((fim - hoje) / MS_POR_DIA);
+
+  let texto;
+  if (dias < 0) texto = `Atrasada ${-dias} ${dias === -1 ? "dia" : "dias"} (previsto ${formatarDataISO(card.fimPrevisto)})`;
+  else if (dias === 0) texto = `Termina hoje (${formatarDataISO(card.fimPrevisto)})`;
+  else texto = `Faltam ${dias} ${dias === 1 ? "dia" : "dias"} para ${formatarDataISO(card.fimPrevisto)}`;
+
+  return `<span class="task-dot" style="background:${cor}" title="${escapeHtml(texto)}"></span>`;
+}
+
 // Faixa "inicio -> termino" do card. Fica vermelha se o termino previsto ja
 // passou e a tarefa ainda nao esta em Finalizado; laranja se vence hoje.
 function renderDatas(card, col) {
@@ -388,89 +528,96 @@ function renderDatas(card, col) {
   </div>`;
 }
 
+// Selo de retencao, so em "Finalizado": quantos dias faltam para a tarefa
+// poder ser removida por qualquer pessoa.
+function renderRetencao(card, col) {
+  if (col.id !== COLUNA_FINAL) return "";
+
+  const dias = diasRestantes(card);
+  if (dias === null) return "";
+
+  if (dias === 0) {
+    return `<div class="task-retencao liberada" title="Passaram-se ${DIAS_RETENCAO} dias: qualquer pessoa pode remover">
+      <span>🗑</span><span>liberada para exclusão</span>
+    </div>`;
+  }
+
+  const aviso = dias <= 7 ? " perto" : "";
+  return `<div class="task-retencao${aviso}" title="Tarefas concluídas ficam ${DIAS_RETENCAO} dias no quadro">
+    <span>⏳</span><span>sai em ${dias} ${dias === 1 ? "dia" : "dias"}</span>
+  </div>`;
+}
+
+// Botao de limpeza da coluna "Finalizado". Aparece so quando ha tarefas que ja
+// passaram dos DIAS_RETENCAO - e qualquer pessoa pode usar.
+function renderBotaoLimpeza(colDiv, col) {
+  if (col.id !== COLUNA_FINAL) return;
+
+  const expirados = cardsExpirados();
+  if (!expirados.length) return;
+
+  const btn = document.createElement("button");
+  btn.className = "limpar-btn";
+  btn.textContent = `🗑 Limpar ${expirados.length} concluída${expirados.length === 1 ? "" : "s"}`;
+  btn.title = `Remove as tarefas que estao ha mais de ${DIAS_RETENCAO} dias em Finalizado`;
+  btn.onclick = () => limparExpiradas();
+  colDiv.appendChild(btn);
+}
+
+async function limparExpiradas() {
+  const expirados = cardsExpirados();
+  if (!expirados.length) return;
+
+  const qtd = expirados.length;
+  const msg =
+    qtd === 1
+      ? `Remover 1 tarefa concluída há mais de ${DIAS_RETENCAO} dias?`
+      : `Remover ${qtd} tarefas concluídas há mais de ${DIAS_RETENCAO} dias?`;
+  if (!confirm(`${msg}
+
+Isso vale para toda a equipe e não tem desfazer.`)) return;
+
+  try {
+    // writeBatch aceita ate 500 operacoes; fatiamos por seguranca.
+    for (let i = 0; i < expirados.length; i += 400) {
+      const lote = writeBatch(db);
+      expirados.slice(i, i + 400).forEach((c) => lote.delete(doc(db, COLECAO_CARDS, c.id)));
+      await lote.commit();
+    }
+    setStatus(`${qtd} ${qtd === 1 ? "tarefa removida" : "tarefas removidas"} do quadro.`);
+  } catch (e) {
+    console.error("[kanban] falha ao limpar concluidas:", e);
+    setStatus("Não foi possível remover as tarefas concluídas.", true);
+  }
+}
+
 /* --------------------------------------------------------------------------
    7. Movimentacao (drag & drop e setas)
    -------------------------------------------------------------------------- */
 
-// Descobre entre quais cards visiveis o item foi solto, olhando a posicao Y.
-function vizinhosNoDrop(listEl, y, idArrastado) {
-  const els = Array.from(listEl.querySelectorAll(".task-card")).filter(
-    (el) => el.dataset.id !== idArrastado
-  );
-
-  let idxProximo = els.length;
-  for (let i = 0; i < els.length; i++) {
-    const r = els[i].getBoundingClientRect();
-    if (y < r.top + r.height / 2) { idxProximo = i; break; }
+// Marca/limpa o inicio da contagem de retencao ao entrar ou sair de "Finalizado".
+function carimboFinalizacao(colunaAntes, colunaDepois) {
+  if (colunaDepois === COLUNA_FINAL && colunaAntes !== COLUNA_FINAL) {
+    return { finalizadoEm: serverTimestamp() };
   }
-
-  return {
-    anteriorId: idxProximo > 0 ? els[idxProximo - 1].dataset.id : null,
-    proximoId: idxProximo < els.length ? els[idxProximo].dataset.id : null
-  };
+  if (colunaAntes === COLUNA_FINAL && colunaDepois !== COLUNA_FINAL) {
+    return { finalizadoEm: null }; // reaberta: a contagem zera
+  }
+  return {};
 }
 
-function ordemEntre(anteriorId, proximoId) {
-  const ant  = anteriorId ? cardPorId(anteriorId)?.ordem ?? null : null;
-  const prox = proximoId  ? cardPorId(proximoId)?.ordem  ?? null : null;
-
-  if (ant == null && prox == null) return PASSO_ORDEM;
-  if (ant == null) return prox - PASSO_ORDEM;
-  if (prox == null) return ant + PASSO_ORDEM;
-  return (ant + prox) / 2;
-}
-
-// Depois de muitas insercoes no mesmo ponto, o espaco entre duas ordens pode
-// ficar pequeno demais para a precisao de ponto flutuante. Quando isso
-// acontece, reescrevemos a coluna inteira com espacamento limpo (1 batch).
-async function renormalizarColuna(colunaId) {
-  const lista = cardsDaColuna(colunaId);
-  if (!lista.length) return;
-
-  const batch = writeBatch(db);
-  lista.forEach((c, i) => {
-    const novaOrdem = (i + 1) * PASSO_ORDEM;
-    batch.update(doc(db, COLECAO_CARDS, c.id), { ordem: novaOrdem });
-    c.ordem = novaOrdem; // espelha no estado local para o calculo seguinte
-  });
-  await batch.commit();
-}
-
-async function soltarCard(cardId, colunaDestino, listEl, clientY) {
+// Soltar um card so muda a COLUNA. A posicao dentro dela e sempre calculada
+// pelo prazo de termino (ver cardsDaColuna), entao nao ha ordem manual para
+// gravar nem posicao de insercao para descobrir.
+async function soltarCard(cardId, colunaDestino) {
   const card = cardPorId(cardId);
-  if (!card) return;
-
-  const { anteriorId, proximoId } = vizinhosNoDrop(listEl, clientY, cardId);
-
-  // Sem mudanca real? Nao grava nada.
-  const mesmaColuna = card.coluna === colunaDestino;
-  const listaAtual = cardsDaColuna(colunaDestino).filter((c) => c.id !== cardId);
-  const posAtual = cardsDaColuna(colunaDestino).findIndex((c) => c.id === cardId);
-  if (mesmaColuna) {
-    const idxDestino = proximoId
-      ? listaAtual.findIndex((c) => c.id === proximoId)
-      : listaAtual.length;
-    if (posAtual === idxDestino) return;
-  }
-
-  const ant  = anteriorId ? cardPorId(anteriorId) : null;
-  const prox = proximoId  ? cardPorId(proximoId)  : null;
-
-  if (ant && prox && Math.abs((prox.ordem ?? 0) - (ant.ordem ?? 0)) < GAP_MINIMO) {
-    try {
-      await renormalizarColuna(colunaDestino);
-    } catch (e) {
-      console.error("[kanban] falha ao renormalizar ordem:", e);
-    }
-  }
-
-  const novaOrdem = ordemEntre(anteriorId, proximoId);
+  if (!card || card.coluna === colunaDestino) return;
 
   try {
     await updateDoc(doc(db, COLECAO_CARDS, cardId), {
       coluna: colunaDestino,
-      ordem: novaOrdem,
-      atualizadoEm: serverTimestamp()
+      atualizadoEm: serverTimestamp(),
+      ...carimboFinalizacao(card.coluna, colunaDestino)
     });
   } catch (e) {
     console.error("[kanban] falha ao mover card:", e);
@@ -489,8 +636,8 @@ async function moverColunaVizinha(cardId, direcao) {
   try {
     await updateDoc(doc(db, COLECAO_CARDS, cardId), {
       coluna: destino.id,
-      ordem: ordemNoFim(destino.id),
-      atualizadoEm: serverTimestamp()
+      atualizadoEm: serverTimestamp(),
+      ...carimboFinalizacao(card.coluna, destino.id)
     });
   } catch (e) {
     console.error("[kanban] falha ao mover card:", e);
@@ -590,7 +737,6 @@ async function salvarTarefa() {
       await addDoc(cardsRef, {
         ...dados,
         coluna: editando.colunaId,
-        ordem: ordemNoFim(editando.colunaId),
         criadoEm: serverTimestamp(),
         criadoPor: nomeInput.value.trim() || "anônimo"
       });
@@ -664,6 +810,10 @@ filtroSel.addEventListener("change", () => {
   filtroDepartamento = filtroSel.value;
   render();
 });
+
+// O contador de dias muda com o tempo, nao com os dados: sem isto uma aba
+// deixada aberta mostraria "sai em 3 dias" para sempre.
+setInterval(render, 60 * 60 * 1000);
 
 preencherSelectsDepartamento();
 carregarNome();

@@ -168,9 +168,9 @@ button{font-family:'Montserrat',sans-serif; cursor:pointer;}
    O grupo "Teste" (2 colunas) recebe flex-basis/max-width proporcionais via
    kanban.js, para que suas colunas fiquem iguais as demais. */
 :root{
-  --col-min: 260px;
+  --col-min: 230px;
   --col-max: 300px;
-  --col-gap: 16px;
+  --col-gap: 10px;
 }
 
 .groups{
@@ -181,7 +181,7 @@ button{font-family:'Montserrat',sans-serif; cursor:pointer;}
   padding-bottom:10px;
 }
 
-.group{flex:1 1 var(--col-min); max-width:var(--col-max);}
+.group{flex:1 1 var(--col-min); max-width:var(--col-max); min-width:0;}
 .group-label{
   font-size:11px;
   font-weight:700;
@@ -217,7 +217,8 @@ button{font-family:'Montserrat',sans-serif; cursor:pointer;}
 .col-header{
   background:var(--vr-graphite);
   color:var(--vr-white);
-  padding:9px 12px;
+  padding:7px 10px;
+  gap:9px;
   border-radius:6px;
   border-bottom:3px solid var(--vr-orange);
   font-weight:700;
@@ -228,7 +229,38 @@ button{font-family:'Montserrat',sans-serif; cursor:pointer;}
   align-items:center;
   margin-bottom:10px;
 }
+/* "+" de nova tarefa, antes do nome da coluna */
+.add-btn{
+  flex-shrink:0;
+  width:24px;
+  height:24px;
+  border:none;
+  border-radius:6px;
+  background:var(--vr-orange);
+  color:var(--vr-white);
+  font-family:'Montserrat',sans-serif;
+  font-size:19px;
+  font-weight:600;
+  line-height:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 0 2px;
+  transition:background .15s, transform .1s;
+}
+.add-btn:hover{background:var(--vr-white); color:var(--vr-orange);}
+.add-btn:active{transform:scale(0.92);}
+
+.col-title{
+  flex:1 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
 .col-count{
+  flex-shrink:0;
   font-weight:700;
   font-size:11px;
   background:var(--vr-orange);
@@ -259,14 +291,27 @@ button{font-family:'Montserrat',sans-serif; cursor:pointer;}
   cursor:grab;
   transition:box-shadow .15s;
 }
+.task-card{position:relative;}
 .task-card:hover{box-shadow:0 3px 8px rgba(0,0,0,0.10);}
+
+/* Bolinha de proximidade do prazo: verde (longe) -> amarelo -> vermelho (perto).
+   A cor exata e calculada em kanban.js e vem no atributo style. */
+.task-dot{
+  position:absolute;
+  top:10px;
+  right:11px;
+  width:11px;
+  height:11px;
+  border-radius:50%;
+  box-shadow:0 0 0 2px var(--vr-white), 0 0 0 3px rgba(0,0,0,0.08);
+}
 .task-card:active{cursor:grabbing;}
 .task-card.dragging{opacity:0.4;}
 .task-card.p-alta{border-left-color:var(--vr-orange);}
 .task-card.p-media{border-left-color:var(--vr-amber);}
 .task-card.p-baixa{border-left-color:var(--vr-gray);}
 
-.task-title{font-weight:600; margin-bottom:4px; word-break:break-word; color:var(--vr-black);}
+.task-title{font-weight:600; margin-bottom:4px; word-break:break-word; color:var(--vr-black); padding-right:16px;}
 .task-desc{color:var(--vr-text); font-size:12px; margin-bottom:8px; word-break:break-word; white-space:pre-wrap;}
 
 .task-tags{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;}
@@ -306,6 +351,38 @@ button{font-family:'Montserrat',sans-serif; cursor:pointer;}
   background:var(--orange-tint);
 }
 
+/* Retencao: quanto falta para a tarefa concluida sair do quadro */
+.task-retencao{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  font-size:10.5px;
+  font-weight:600;
+  color:var(--vr-text);
+  margin-bottom:8px;
+  white-space:nowrap;
+}
+.task-retencao.perto{color:var(--vr-orange-dark);}
+.task-retencao.liberada{
+  color:var(--danger);
+  background:rgba(220,53,69,0.08);
+  border-radius:4px;
+  padding:4px 7px;
+}
+
+.limpar-btn{
+  margin-top:8px;
+  background:transparent;
+  border:1.5px solid var(--danger);
+  color:var(--danger);
+  font-size:12px;
+  font-weight:600;
+  padding:7px;
+  border-radius:6px;
+  width:100%;
+}
+.limpar-btn:hover{background:var(--danger); color:var(--vr-white);}
+
 .task-meta{
   display:flex;
   justify-content:space-between;
@@ -338,21 +415,6 @@ button{font-family:'Montserrat',sans-serif; cursor:pointer;}
 .icon-btn:disabled{opacity:0.25; cursor:default;}
 .icon-btn:disabled:hover{background:transparent; color:var(--vr-text);}
 
-.add-card-btn{
-  margin-top:8px;
-  background:transparent;
-  border:1.5px dashed var(--vr-gray);
-  color:var(--vr-gray-dark);
-  font-size:12.5px;
-  font-weight:600;
-  padding:7px;
-  border-radius:6px;
-}
-.add-card-btn:hover{
-  border-color:var(--vr-orange);
-  color:var(--vr-orange-dark);
-  background:var(--orange-tint);
-}
 
 /* ---------- Modal ---------- */
 .overlay{

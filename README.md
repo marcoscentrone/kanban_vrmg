@@ -37,18 +37,27 @@ Um documento por tarefa (id gerado pelo Firestore via `addDoc`):
 | `departamento` | string    | Ex.: Suporte, Implantação, Desenvolvimento… (lista em `kanban.js`) |
 | `responsavel`  | string    | Nome de quem toca a tarefa (gera as iniciais do avatar) |
 | `prioridade`   | string    | `baixa` \| `media` \| `alta` (define a cor da borda esquerda) |
-| `ordem`        | number    | Posição dentro da coluna |
 | `inicioPrevisto` | string  | Projeção de início, `"AAAA-MM-DD"` (ou `""`) |
 | `fimPrevisto`  | string    | Projeção de término, `"AAAA-MM-DD"` (ou `""`) — fica vermelho no card se já passou |
+| `finalizadoEm` | timestamp | Quando entrou em *Finalizado* (base da retenção de 30 dias); `null` se for reaberta |
 | `criadoEm`     | timestamp | `serverTimestamp()` |
 | `atualizadoEm` | timestamp | `serverTimestamp()` |
 | `criadoPor`    | string    | Nome digitado em "Você é" |
 
-**Sobre `ordem`:** ao soltar um card entre outros dois, a nova ordem é a média
-das ordens vizinhas (espaçamento base de 1000). Assim cada movimento grava
-**um único documento**, em vez de reescrever a coluna inteira. Se o espaço entre
-duas ordens ficar pequeno demais, a coluna é renormalizada automaticamente com
-um `writeBatch`.
+**Ordenação:** não existe ordem manual. Dentro de cada coluna os cards se
+organizam sozinhos por urgência — os mais perto do término previsto no topo, os
+folgados abaixo, e os **sem data de término sempre por último** (entre si, do
+mais antigo para o mais novo). Arrastar um card só muda a *coluna*; a posição é
+sempre consequência do prazo e se reorganiza quando alguém edita uma data ou o
+dia vira. Em *Finalizado* não há urgência: vale a ordem de criação.
+
+**Retenção das concluídas:** uma tarefa movida para *Finalizado* ganha o carimbo
+`finalizadoEm`. Durante 30 dias o card mostra `⏳ sai em N dias`; passado o prazo
+ele passa a exibir `🗑 liberada para exclusão` e surge no rodapé da coluna o
+botão **Limpar N concluídas**, que qualquer pessoa pode usar (apaga em
+`writeBatch`, com confirmação). Nada é apagado automaticamente — a exclusão é
+sempre uma ação de alguém. O prazo fica em `DIAS_RETENCAO`, em `js/kanban.js`.
+Mover a tarefa de volta para outra coluna zera a contagem.
 
 As **colunas não ficam no Firestore** — são fixas em `js/kanban.js` (`COLUNAS`),
 porque mudam raramente e assim o quadro abre já desenhado.
