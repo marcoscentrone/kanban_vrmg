@@ -12,7 +12,8 @@
    migracao para o Firebase da empresa).
    ========================================================================== */
 
-import { db, COLECAO_CARDS, AMBIENTE } from "./firebase-config.js";
+import { db, COLECAO_CARDS, COLECAO_DEPARTAMENTOS, AMBIENTE } from "./firebase-config.js";
+import { protegerPagina, montarBarraUsuario } from "./auth.js";
 import {
   collection,
   doc,
@@ -40,18 +41,11 @@ const COLUNAS = [
   { id: "finalizado", titulo: "Finalizado", grupo: null    }
 ];
 
-// Ajuste esta lista conforme os departamentos reais da unidade.
-const DEPARTAMENTOS = [
-  "Suporte",
-  "Implantação",
-  "Desenvolvimento",
-  "Comercial",
-  "Financeiro",
-  "Administrativo"
-];
+// Os departamentos sao cadastrados na area administrativa (admin.html) e vem do
+// Firestore em tempo real - criar um la reflete aqui sem recarregar a pagina.
+let DEPARTAMENTOS = [];
 
 const PRIORIDADES = ["baixa", "media", "alta"];
-const CHAVE_NOME = "kanban-user-name";
 
 // Retencao das tarefas concluidas: uma tarefa fica 30 dias em "Finalizado" e,
 // depois disso, qualquer pessoa pode remove-la pelo botao "Limpar concluídas".
@@ -72,6 +66,7 @@ let cards = [];                                  // [{id, titulo, coluna, ...}]
 let editando = { colunaId: null, cardId: null }; // alvo do modal
 let arrastando = null;                           // id do card em drag
 let filtroDepartamento = "";
+let usuario = null;   // { user, email, permissao } - preenchido no boot
 
 const cardsRef = collection(db, COLECAO_CARDS);
 
@@ -86,7 +81,7 @@ const statusEl   = $("statusLine");
 const liveBadge  = $("liveBadge");
 const liveText   = $("liveText");
 const overlay    = $("overlay");
-const nomeInput  = $("userName");
+
 const filtroSel  = $("filtroDepartamento");
 const erroModal  = $("modalError");
 
@@ -206,9 +201,31 @@ function porCriacao(a, b) {
 }
 
 function cardsVisiveis(colunaId) {
-  const lista = cardsDaColuna(colunaId);
-  if (!filtroDepartamento) return lista;
-  return lista.filter((c) => (c.departamento || "") === filtroDepartamento);
+  let lista = cardsDaColuna(colunaId);
+
+  // Permissao do usuario logado: com departamentos definidos em kanban_acessos,
+  // ele so enxerga tarefas desses departamentos. Tarefas sem departamento ficam
+  // visiveis para todos, senao ninguem as encontraria para classificar.
+  if (usuario && !usuario.permissao.veTudo) {
+    const meus = usuario.permissao.departamentos;
+    lista = lista.filter((c) => !c.departamento || meus.includes(c.departamento));
+  }
+
+  // Filtro manual do topo da tela.
+  if (filtroDepartamento) {
+    lista = lista.filter((c) => (c.departamento || "") === filtroDepartamento);
+  }
+  return lista;
+}
+
+// "marcos.centrone@vrsoft.com.br" -> "Marcos Centrone" (so para o avatar/nome)
+function nomeDoEmail(email) {
+  return (email || "")
+    .split("@")[0]
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((p) => p[0].toUpperCase() + p.slice(1))
+    .join(" ");
 }
 
 
@@ -304,6 +321,29 @@ function escutarQuadro() {
         true
       );
     }
+  );
+}
+
+function escutarDepartamentos() {
+  onSnapshot(
+    collection(db, COLECAO_DEPARTAMENTOS),
+    (snap) => {
+      DEPARTAMENTOS = snap.docs
+        .map((d) => (d.data().nome || "").trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+      // Preserva o que estiver selecionado ao redesenhar os selects.
+      const filtroAtual = filtroSel.value;
+      const modalAtual = $("fDepartamento").value;
+      preencherSelectsDepartamento();
+      filtroSel.value = DEPARTAMENTOS.includes(filtroAtual) ? filtroAtual : "";
+      $("fDepartamento").value = DEPARTAMENTOS.includes(modalAtual) ? modalAtual : "";
+      filtroDepartamento = filtroSel.value;
+
+      render();
+    },
+    (erro) => console.error("[kanban] falha ao ler departamentos:", erro)
   );
 }
 
@@ -649,16 +689,22 @@ async function moverColunaVizinha(cardId, direcao) {
    8. Modal + CRUD
    -------------------------------------------------------------------------- */
 
+function departamentosDisponiveis() {
+  if (!usuario || usuario.permissao.veTudo) return DEPARTAMENTOS;
+  return DEPARTAMENTOS.filter((d) => usuario.permissao.departamentos.includes(d));
+}
+
 function preencherSelectsDepartamento() {
   const selModal = $("fDepartamento");
+  const lista = departamentosDisponiveis();
 
   selModal.innerHTML = '<option value="">— sem departamento —</option>';
-  DEPARTAMENTOS.forEach((d) => {
+  lista.forEach((d) => {
     selModal.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`);
   });
 
   filtroSel.innerHTML = '<option value="">Todos</option>';
-  DEPARTAMENTOS.forEach((d) => {
+  lista.forEach((d) => {
     filtroSel.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`);
   });
 }
@@ -685,7 +731,7 @@ function abrirModal(colunaId, cardId) {
     $("fTitle").value = "";
     $("fDesc").value = "";
     $("fDepartamento").value = filtroDepartamento || "";
-    $("fAssignee").value = nomeInput.value.trim();
+    $("fAssignee").value = usuario ? nomeDoEmail(usuario.email) : "";
     $("fPriority").value = "media";
     $("fInicio").value = "";
     $("fFim").value = "";
@@ -738,7 +784,7 @@ async function salvarTarefa() {
         ...dados,
         coluna: editando.colunaId,
         criadoEm: serverTimestamp(),
-        criadoPor: nomeInput.value.trim() || "anônimo"
+        criadoPor: usuario ? usuario.email : ""
       });
     }
     fecharModal();
@@ -766,29 +812,6 @@ async function excluirTarefa() {
 }
 
 /* --------------------------------------------------------------------------
-   9. Nome do usuario (local, so deste navegador)
-   -------------------------------------------------------------------------- */
-// Enquanto nao houver Firebase Authentication, o nome fica no localStorage.
-// Ao integrar ao portal, basta trocar isto pelo displayName do usuario logado.
-
-function carregarNome() {
-  try {
-    const salvo = localStorage.getItem(CHAVE_NOME);
-    if (salvo) nomeInput.value = salvo;
-  } catch (e) {
-    /* localStorage bloqueado - segue sem nome salvo */
-  }
-}
-
-function salvarNome() {
-  try {
-    localStorage.setItem(CHAVE_NOME, nomeInput.value.trim());
-  } catch (e) {
-    /* ignora */
-  }
-}
-
-/* --------------------------------------------------------------------------
    10. Ligacoes de eventos + boot
    -------------------------------------------------------------------------- */
 
@@ -804,8 +827,6 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) salvarTarefa();
 });
 
-nomeInput.addEventListener("change", salvarNome);
-
 filtroSel.addEventListener("change", () => {
   filtroDepartamento = filtroSel.value;
   render();
@@ -815,6 +836,14 @@ filtroSel.addEventListener("change", () => {
 // deixada aberta mostraria "sai em 3 dias" para sempre.
 setInterval(render, 60 * 60 * 1000);
 
-preencherSelectsDepartamento();
-carregarNome();
-escutarQuadro();
+// Nada roda antes do login: protegerPagina() so resolve com alguem autenticado.
+protegerPagina().then((logado) => {
+  usuario = logado;
+
+  montarBarraUsuario($("barraUsuario"), logado);
+  if (logado.permissao.admin) $("linkAdmin").style.display = "inline-block";
+
+  preencherSelectsDepartamento();
+  escutarDepartamentos();
+  escutarQuadro();
+});

@@ -127,6 +127,8 @@ button{font-family:'Montserrat',sans-serif; cursor:pointer;}
   font-weight:600;
 }
 .btn-ghost:hover{background:var(--vr-surface);}
+/* .btn-ghost tambem e usado em links (<a>), como o de Administracao */
+a.btn-ghost{text-decoration:none; display:inline-block;}
 
 /* Indicador de conexao em tempo real. Substitui o antigo botao "Atualizar":
    com onSnapshot o quadro se atualiza sozinho, sem recarregar. */

@@ -1,25 +1,82 @@
 rules_version = '2';
 
 // ============================================================================
-// REGRAS DO AMBIENTE DE TESTE (projeto "kanbanvr")
+// REGRAS - projeto de teste "kanbanvr"
 // ----------------------------------------------------------------------------
-// Cole este conteudo em: Firebase Console > Firestore Database > Regras.
+// ORDEM IMPORTANTE ao publicar:
+//   1. Firebase Console > Authentication > Sign-in method > Google > Ativar
+//   2. Testar o login em http://localhost:5500
+//   3. So entao publicar estas regras
+// Publicar antes de ativar o login tranca o acesso para todo mundo.
 //
-// ATENCAO: estas regras liberam leitura e escrita para QUALQUER pessoa que
-// conheca o projeto. Servem apenas para testar o quadro isoladamente, sem
-// login. NAO use isto no Firebase da VR Software.
+// O que elas garantem hoje: ninguem sem conta Google autenticada le ou escreve
+// qualquer coisa. E o essencial - antes disso o banco estava aberto a qualquer
+// pessoa com o link.
 //
-// Quando o Firebase Authentication entrar (integracao com o portal), troque
-// a linha `allow read, write: if true;` por:
-//     allow read, write: if request.auth != null;
+// O QUE ELAS AINDA NAO GARANTEM: o recorte por departamento. Hoje esse filtro
+// acontece na tela (kanban.js), o que basta para organizar o trabalho, mas nao
+// impede alguem tecnico de ler todas as tarefas pelo console do navegador.
+// Para virar barreira de verdade seria preciso:
+//   a) trocar o onSnapshot da colecao inteira por uma query com
+//      where("departamento", "in", [...meus departamentos]), porque as regras
+//      do Firestore VALIDAM a consulta - elas nao filtram resultados; e
+//   b) usar a regra comentada em baixo.
+// Vale fazer quando o quadro sair do ambiente de teste.
 // ============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Colecao do quadro. Nenhuma outra colecao e liberada.
+    function logado() {
+      return request.auth != null;
+    }
+
+    function meuEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function souAdmin() {
+      return logado()
+        && exists(/databases/$(database)/documents/kanban_acessos/$(meuEmail()))
+        && get(/databases/$(database)/documents/kanban_acessos/$(meuEmail())).data.admin == true;
+    }
+
+    // ---- Tarefas do quadro ----
     match /kanban_cards/{cardId} {
-      allow read, write: if true;
+      allow read, write: if logado();
+
+      // Recorte por departamento no servidor (requer a query do item (a) acima):
+      // allow read: if logado() && (
+      //      resource.data.departamento == ""
+      //   || resource.data.departamento in
+      //      get(/databases/$(database)/documents/kanban_acessos/$(meuEmail())).data.departamentos
+      // );
+    }
+
+    // ---- Departamentos: todos leem, so admin altera ----
+    match /kanban_departamentos/{departamentoId} {
+      allow read: if logado();
+      allow write: if souAdmin();
+    }
+
+    // ---- Acessos: e-mail -> departamentos ----
+    //
+    // PENDENTE DE ENDURECER. Hoje qualquer pessoa autenticada pode escrever
+    // aqui. E assim de proposito, para o PRIMEIRO acesso: enquanto nao houver
+    // nenhum administrador cadastrado, alguem precisa conseguir se cadastrar
+    // como tal - senao a area administrativa nasce trancada, sem ninguem capaz
+    // de abrir.
+    //
+    // >>> DEPOIS DE CADASTRAR O PRIMEIRO ADMINISTRADOR, troque a linha do write
+    // >>> por:   allow write: if souAdmin();
+    // >>> e republique. Sem isso, qualquer pessoa logada pode se dar acesso.
+    //
+    // A leitura fica liberada a quem esta logado porque auth.js precisa ler o
+    // proprio documento e a tela administrativa precisa saber se ja existe
+    // algum administrador.
+    match /kanban_acessos/{email} {
+      allow read: if logado();
+      allow write: if logado();   // <- trocar por souAdmin() apos o 1o admin
     }
   }
 }

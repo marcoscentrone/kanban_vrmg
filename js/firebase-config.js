@@ -17,6 +17,7 @@
    ========================================================================== */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -39,6 +40,13 @@ export const firebaseConfig = {
 // o nome da colecao pode precisar mudar junto com as credenciais.
 export const COLECAO_CARDS = "kanban_cards";
 
+// Cadastros da area administrativa (admin.html).
+//   kanban_departamentos/{id}    -> { nome, criadoEm, atualizadoEm }
+//   kanban_acessos/{email}       -> { email, departamentos: [nomes], ... }
+// O e-mail e o proprio id do documento, o que impede cadastro duplicado.
+export const COLECAO_DEPARTAMENTOS = "kanban_departamentos";
+export const COLECAO_ACESSOS = "kanban_acessos";
+
 // Ambiente atual - usado so para exibir um aviso discreto na tela.
 // Troque para "producao" quando apontar para o Firebase da empresa.
 export const AMBIENTE = "teste";
@@ -57,6 +65,38 @@ export const app = initializeApp(firebaseConfig);
 //    WebChannel/streaming, que proxies e firewalls corporativos costumam
 //    segurar. Com isto o SDK detecta o bloqueio e cai para long-polling sozinho,
 //    em vez de ficar tentando e dando a impressao de lentidao.
+// Authentication: login com conta Google. O e-mail verificado que vem daqui e
+// a chave usada em kanban_acessos para decidir o que a pessoa enxerga.
+export const auth = getAuth(app);
+
+/* ==========================================================================
+   CONTROLE DE ACESSO - as duas travas que o portal da empresa ja usa
+   (confirmado com o Rodrigo em 15/09/2026: "a primeira e pelo dominio,
+   ninguem acessa fora do dominio; e outra por nome")
+
+   Comecam DESLIGADAS para permitir os testes com conta pessoal.
+   Para valer a regra da empresa, faca as duas coisas:
+
+     1. preencha DOMINIOS_PERMITIDOS com o dominio corporativo
+     2. troque EXIGIR_CADASTRO para true
+   ========================================================================== */
+
+// Trava 1 - dominio. Lista VAZIA aceita qualquer conta Google (modo teste).
+// Preenchida, so entram e-mails terminados nestes dominios.
+export const DOMINIOS_PERMITIDOS = [
+  // "vrsoft.com.br",     // <- confirmar o dominio real com o Rodrigo
+];
+
+// Excecoes pontuais a trava de dominio (consultores, conta de teste).
+// Esvazie antes de ir para producao.
+export const EMAILS_LIBERADOS = [
+  // "marcos.centrone@gmail.com",
+];
+
+// Trava 2 - cadastro. Com true, so entra quem tem documento em kanban_acessos.
+// Com false, quem nao esta cadastrado entra e ve todos os departamentos.
+export const EXIGIR_CADASTRO = false;
+
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
   experimentalAutoDetectLongPolling: true

@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="css/kanban.css">
+<link rel="stylesheet" href="css/auth.css">
 </head>
 <body>
 
@@ -29,10 +30,9 @@
         </select>
       </div>
 
-      <div class="who">
-        <label for="userName">Você é:</label>
-        <input id="userName" placeholder="seu nome" maxlength="20" autocomplete="off">
-      </div>
+      <a class="btn-ghost" href="admin.html" title="Departamentos e permissões" id="linkAdmin" style="display:none;">⚙ Administração</a>
+
+      <div id="barraUsuario"></div>
 
       <div class="live-badge" id="liveBadge">
         <span class="live-dot"></span>

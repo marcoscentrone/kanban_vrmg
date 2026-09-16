@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Administração — Quadro de Fluxo</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/kanban.css">
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+
+<div class="board-shell">
+
+  <div class="topbar">
+    <div>
+      <h1>Área <span>Administrativa</span></h1>
+      <p>VR Software — Unidade Minas Gerais · departamentos e permissões de acesso</p>
+    </div>
+    <div class="actions-row">
+      <a class="btn-ghost" href="index.html">← Voltar ao quadro</a>
+      <div id="barraUsuario"></div>
+      <div class="live-badge" id="liveBadge">
+        <span class="live-dot"></span>
+        <span id="liveText">conectando…</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-line" id="statusLine">Carregando cadastros…</div>
+
+  <div class="admin-grid">
+
+    <!-- ============ Departamentos ============ -->
+    <section class="painel">
+      <div class="painel-head">
+        <h2>Departamentos</h2>
+        <span class="contador" id="contaDepartamentos">0</span>
+      </div>
+      <p class="painel-hint">
+        Alimentam o campo <em>Departamento</em> das tarefas e a lista de permissões ao lado.
+      </p>
+
+      <form class="form-linha" id="formDepartamento">
+        <input id="novoDepartamento" maxlength="40" placeholder="Nome do departamento" autocomplete="off" required>
+        <button class="btn-primary" type="submit">Adicionar</button>
+      </form>
+      <div class="erro" id="erroDepartamento"></div>
+
+      <ul class="lista" id="listaDepartamentos"></ul>
+    </section>
+
+    <!-- ============ Acessos por e-mail ============ -->
+    <section class="painel">
+      <div class="painel-head">
+        <h2>Acessos por e-mail</h2>
+        <span class="contador" id="contaAcessos">0</span>
+      </div>
+      <p class="painel-hint">
+        Define quais departamentos cada pessoa enxerga no quadro.
+        Um e-mail pode ter vários departamentos. Sem nenhum marcado, a pessoa vê tudo.
+      </p>
+
+      <form class="form-acesso" id="formAcesso">
+        <input id="novoEmail" type="email" maxlength="80" placeholder="nome@vrsoft.com.br" autocomplete="off" required>
+        <div class="checkboxes" id="checkboxesDepartamentos"></div>
+        <label class="check-admin">
+          <input type="checkbox" id="ehAdmin">
+          <span>Administrador — pode abrir esta página</span>
+        </label>
+
+        <div class="form-acoes">
+          <button class="btn-ghost" type="button" id="cancelarAcesso" style="display:none;">Cancelar</button>
+          <button class="btn-primary" type="submit" id="salvarAcesso">Adicionar acesso</button>
+        </div>
+      </form>
+      <div class="erro" id="erroAcesso"></div>
+
+      <ul class="lista" id="listaAcessos"></ul>
+    </section>
+
+  </div>
+
+  <p class="aviso-seguranca">
+    <strong>Como funciona:</strong> a pessoa entra com a conta Google e o e-mail dela é
+    procurado nesta lista. Com departamentos marcados, ela vê só as tarefas deles; sem nenhum
+    marcado, vê todas. Marque <em>Administrador</em> para liberar o acesso a esta página.
+    <br><br>
+    As duas travas de acesso (<em>domínio corporativo</em> e <em>cadastro obrigatório</em>)
+    ficam em <code>js/firebase-config.js</code> e começam <strong>desligadas</strong> para os
+    testes. Ligue-as antes de colocar em produção.
+  </p>
+
+</div>
+
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>
