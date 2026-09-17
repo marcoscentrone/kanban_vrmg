@@ -1,31 +1,41 @@
 rules_version = '2';
 
 // ============================================================================
-// REGRAS - projeto de teste "kanbanvr"
+// REGRAS DO FIRESTORE - Quadro de Fluxo (projeto de teste "kanbanvr")
 // ----------------------------------------------------------------------------
-// ORDEM IMPORTANTE ao publicar:
-//   1. Firebase Console > Authentication > Sign-in method > Google > Ativar
-//   2. Testar o login em http://localhost:5500
-//   3. So entao publicar estas regras
-// Publicar antes de ativar o login tranca o acesso para todo mundo.
+// COMO USAR ESTE ARQUIVO
 //
-// O que elas garantem hoje: ninguem sem conta Google autenticada le ou escreve
-// qualquer coisa. E o essencial - antes disso o banco estava aberto a qualquer
-// pessoa com o link.
+// Ele ja contem as regras DEFINITIVAS, mas comeca em MODO ABERTO para voce
+// conseguir configurar tudo (cadastrar o administrador e os departamentos).
 //
-// O QUE ELAS AINDA NAO GARANTEM: o recorte por departamento. Hoje esse filtro
-// acontece na tela (kanban.js), o que basta para organizar o trabalho, mas nao
-// impede alguem tecnico de ler todas as tarefas pelo console do navegador.
-// Para virar barreira de verdade seria preciso:
-//   a) trocar o onSnapshot da colecao inteira por uma query com
-//      where("departamento", "in", [...meus departamentos]), porque as regras
-//      do Firestore VALIDAM a consulta - elas nao filtram resultados; e
-//   b) usar a regra comentada em baixo.
-// Vale fazer quando o quadro sair do ambiente de teste.
+//   >>> PARA FECHAR, troque UMA linha:   modoAberto() -> return false;
+//
+// Nao e preciso apagar nem reescrever nada: as regras reais ja estao aqui
+// embaixo, so ficam adormecidas enquanto o modo aberto estiver ligado.
+//
+// ATENCAO: com modoAberto() em true, qualquer pessoa com as credenciais do
+// projeto le e escreve tudo, inclusive sem estar logada. Use apenas durante a
+// configuracao inicial, com dados de teste.
 // ============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ---------------- INTERRUPTOR GERAL ----------------
+    // true  = libera tudo (configuracao inicial)
+    // false = valem as regras reais definidas abaixo
+    function modoAberto() {
+      return true;          // <<<<<< TROQUE PARA false QUANDO TERMINAR
+    }
+
+    // ---------------- Auxiliares ----------------
+
+    // Dono do quadro: acesso total, sempre, independente de cadastro.
+    // E a garantia de nunca ficar trancado do lado de fora.
+    function souDono() {
+      return request.auth != null
+        && request.auth.token.email.lower() == 'marcos.centrone@vrbelohorizonte.com.br';
+    }
 
     function logado() {
       return request.auth != null;
@@ -36,47 +46,33 @@ service cloud.firestore {
     }
 
     function souAdmin() {
-      return logado()
-        && exists(/databases/$(database)/documents/kanban_acessos/$(meuEmail()))
-        && get(/databases/$(database)/documents/kanban_acessos/$(meuEmail())).data.admin == true;
+      return souDono()
+        || (logado()
+            && exists(/databases/$(database)/documents/kanban_acessos/$(meuEmail()))
+            && get(/databases/$(database)/documents/kanban_acessos/$(meuEmail())).data.admin == true);
     }
 
-    // ---- Tarefas do quadro ----
+    // ---------------- Tarefas ----------------
     match /kanban_cards/{cardId} {
-      allow read, write: if logado();
-
-      // Recorte por departamento no servidor (requer a query do item (a) acima):
-      // allow read: if logado() && (
-      //      resource.data.departamento == ""
-      //   || resource.data.departamento in
-      //      get(/databases/$(database)/documents/kanban_acessos/$(meuEmail())).data.departamentos
-      // );
+      allow read, write: if modoAberto() || souDono() || logado();
     }
 
-    // ---- Departamentos: todos leem, so admin altera ----
+    // ---------------- Departamentos ----------------
+    // Todos os logados leem (o quadro precisa da lista); so admin altera.
     match /kanban_departamentos/{departamentoId} {
-      allow read: if logado();
-      allow write: if souAdmin();
+      allow read:  if modoAberto() || souDono() || logado();
+      allow write: if modoAberto() || souAdmin();
     }
 
-    // ---- Acessos: e-mail -> departamentos ----
-    //
-    // PENDENTE DE ENDURECER. Hoje qualquer pessoa autenticada pode escrever
-    // aqui. E assim de proposito, para o PRIMEIRO acesso: enquanto nao houver
-    // nenhum administrador cadastrado, alguem precisa conseguir se cadastrar
-    // como tal - senao a area administrativa nasce trancada, sem ninguem capaz
-    // de abrir.
-    //
-    // >>> DEPOIS DE CADASTRAR O PRIMEIRO ADMINISTRADOR, troque a linha do write
-    // >>> por:   allow write: if souAdmin();
-    // >>> e republique. Sem isso, qualquer pessoa logada pode se dar acesso.
-    //
-    // A leitura fica liberada a quem esta logado porque auth.js precisa ler o
-    // proprio documento e a tela administrativa precisa saber se ja existe
-    // algum administrador.
+    // ---------------- Acessos (e-mail -> departamentos) ----------------
+    // Leitura liberada a quem esta logado: auth.js precisa ler o proprio
+    // documento e a tela administrativa precisa saber se ja existe um admin.
+    // Escrita so para administradores.
     match /kanban_acessos/{email} {
-      allow read: if logado();
-      allow write: if logado();   // <- trocar por souAdmin() apos o 1o admin
+      allow read:  if modoAberto() || souDono() || logado();
+      allow write: if modoAberto() || souAdmin();
     }
+
+    // Qualquer outra colecao continua bloqueada.
   }
 }

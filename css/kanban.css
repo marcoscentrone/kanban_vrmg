@@ -166,12 +166,10 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
 /* Cada coluna tem largura entre --col-min e --col-max. Em tela larga elas
    crescem ate o maximo; ao estreitar a janela, primeiro encolhem ate o minimo
    e depois QUEBRAM para a linha de baixo (flex-wrap), mantendo a sequencia
-   Demanda -> ... -> Finalizado. Nao ha rolagem horizontal.
-   O grupo "Teste" (2 colunas) recebe flex-basis/max-width proporcionais via
-   kanban.js, para que suas colunas fiquem iguais as demais. */
+   cadastrada para o departamento. Nao ha rolagem horizontal. */
 :root{
   --col-min: 230px;
-  --col-max: 300px;
+  /*--col-max: 300px;*/
   --col-gap: 10px;
 }
 
@@ -184,19 +182,6 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
 }
 
 .group{flex:1 1 var(--col-min); max-width:var(--col-max); min-width:0;}
-.group-label{
-  font-size:11px;
-  font-weight:700;
-  text-transform:uppercase;
-  letter-spacing:1px;
-  text-align:center;
-  color:var(--vr-orange);
-  margin-bottom:6px;
-  visibility:hidden;
-  height:14px;
-}
-.group-label.show{visibility:visible;}
-
 .group-cols{display:flex; gap:var(--col-gap);}
 
 .column{
@@ -469,6 +454,13 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
   box-shadow:0 0 0 3px var(--orange-tint);
 }
 .field textarea{resize:vertical; min-height:60px;}
+
+/* Campo com valor que nao existe na base */
+.field input.invalido{
+  border-color:var(--danger);
+  box-shadow:0 0 0 3px rgba(220,53,69,0.12);
+}
+.field-hint.erro{color:var(--danger); font-weight:600;}
 .field input[type="date"]{min-width:0;}
 
 .field-row{
@@ -493,6 +485,28 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
   background:none;border:none;color:var(--danger);
   font-size:12.5px; font-weight:600; text-decoration:underline; padding:0;
 }
+/* Dono da tarefa: so o nome, sem caixa */
+.campo-dono{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:2px 0 0;
+  font-size:14px;
+  font-weight:700;
+  color:var(--vr-orange);
+}
+.campo-dono .voce{
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--vr-white);
+  background:var(--vr-orange);
+  padding:2px 7px;
+  border-radius:4px;
+}
+.campo-dono.vazio{color:var(--vr-text); font-weight:500; font-style:italic; font-size:13px;}
+
 .modal-error{
   color:var(--danger);
   font-size:12px;
@@ -510,3 +524,158 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
   .group-cols{flex-wrap:wrap;}
   .column{flex:1 1 100%;}
 }
+
+/* Quadro sem departamento escolhido */
+.aviso-sem-dep{
+  margin:24px 0;
+  padding:22px;
+  text-align:center;
+  font-size:14px;
+  font-weight:500;
+  color:var(--vr-text);
+  background:var(--vr-surface);
+  border:1.5px dashed var(--vr-gray);
+  border-radius:8px;
+  width:100%;
+}
+
+/* ---------- Subtarefas no card ---------- */
+.task-subs{
+  margin:8px 0;
+  padding:7px 8px;
+  background:var(--vr-surface);
+  border-radius:5px;
+}
+.task-subs.completo{background:rgba(97,206,112,0.12);}
+
+.subs-topo{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:9.5px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--vr-text);
+  margin-bottom:5px;
+}
+.subs-contagem{color:var(--vr-gray-dark);}
+.task-subs.completo .subs-contagem{color:var(--live-green);}
+
+.subs-lista{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px;}
+
+/* Cada subtarefa e uma caixa arredondada. A cor de fundo vem do cronograma
+   (calculada em kanban.js) e fica ENTRE o fundo cinza do bloco e o texto.
+   O texto e escuro em toda a escala de proposito: as cores tem luminosidade
+   media-alta (45-60%), entao preto sobre elas mantem contraste >= 4.5:1,
+   enquanto branco cairia para ~2:1 no verde e no amarelo. */
+.sub{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:11.5px;
+  padding:4px 7px;
+  border-radius:5px;
+  cursor:pointer;
+  background:var(--vr-white);
+  color:var(--vr-gray-dark);
+  transition:filter .12s;
+}
+.sub:hover{filter:brightness(1.07);}
+
+.sub-icone{flex-shrink:0; width:13px; text-align:center; font-weight:700;}
+.sub-num{flex-shrink:0; font-size:9.5px; font-weight:700; opacity:0.75;}
+.sub-nome{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+/* Com cor de cronograma: texto escuro, mais encorpado, sobre o fundo colorido */
+.sub.colorida{
+  color:#1a1508;
+  font-weight:600;
+  /* a cor translucida e pintada sobre branco, nao sobre o cinza do bloco:
+     assim a intensidade fica igual em qualquer fundo */
+  background-color:var(--vr-white);
+  background-image:linear-gradient(var(--cor-sub), var(--cor-sub));
+}
+.sub.colorida .sub-icone{color:inherit;}
+.sub.colorida .sub-num{opacity:0.6;}
+
+/* Sem cronograma (tarefa sem data de termino): caixa neutra */
+.sub:not(.colorida).pendente .sub-icone{color:var(--vr-gray);}
+.sub:not(.colorida).fazendo  .sub-icone{color:var(--vr-orange);}
+.sub:not(.colorida).feito    .sub-icone{color:var(--live-green);}
+
+/* Em andamento ganha um anel, para destacar entre as pendentes */
+.sub.fazendo{box-shadow:inset 0 0 0 1.5px rgba(0,0,0,0.25);}
+
+/* Concluida: verde fixo, riscada */
+.sub.feito .sub-nome{text-decoration:line-through; opacity:0.7;}
+
+/* ---------- Subtarefas no modal ---------- */
+.label-linha{display:flex; justify-content:space-between; align-items:center;}
+.contador-sub{
+  font-size:10px;
+  font-weight:700;
+  background:var(--vr-graphite);
+  color:var(--vr-white);
+  padding:1px 7px;
+  border-radius:9px;
+}
+
+#subsModal{display:flex; flex-direction:column; gap:5px; margin-bottom:7px;}
+.subs-vazio{margin:4px 0 0; font-size:11.5px; color:var(--vr-text); font-style:italic;}
+
+.sub-linha{display:flex; align-items:center; gap:6px;}
+.sub-linha .sub-input{
+  flex:1 1 auto;
+  min-width:0;
+  padding:6px 8px;
+  border:1.5px solid var(--vr-gray-light);
+  border-radius:5px;
+  font-family:'Montserrat',sans-serif;
+  font-size:12.5px;
+  background:var(--vr-white);
+  color:var(--vr-black);
+}
+.sub-linha .sub-input:focus{outline:none; border-color:var(--vr-orange);}
+.sub-linha.feito .sub-input{text-decoration:line-through; opacity:0.65;}
+
+.sub-estado{
+  flex-shrink:0;
+  width:26px; height:26px;
+  border:1.5px solid var(--vr-gray-light);
+  border-radius:5px;
+  background:var(--vr-white);
+  font-size:13px;
+  font-weight:700;
+  line-height:1;
+}
+.sub-linha.pendente .sub-estado{color:var(--vr-gray);}
+.sub-linha.fazendo  .sub-estado{color:var(--vr-orange); border-color:var(--vr-orange);}
+.sub-linha.feito    .sub-estado{color:var(--live-green); border-color:var(--live-green);}
+
+.sub-remover{
+  flex-shrink:0;
+  width:24px; height:24px;
+  border:none;
+  background:transparent;
+  color:var(--vr-text);
+  font-size:17px;
+  line-height:1;
+  border-radius:4px;
+}
+.sub-remover:hover{background:var(--danger); color:var(--vr-white);}
+
+#addSubBox{display:flex; gap:6px;}
+#addSubBox input{
+  flex:1 1 auto;
+  min-width:0;
+  padding:7px 9px;
+  border:1.5px solid var(--vr-gray-light);
+  border-radius:5px;
+  font-family:'Montserrat',sans-serif;
+  font-size:12.5px;
+  background:var(--vr-white);
+  color:var(--vr-black);
+}
+#addSubBox input:focus{outline:none; border-color:var(--vr-orange);}
+#addSubBox .btn-ghost{padding:7px 12px; font-size:12px;}

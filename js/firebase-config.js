@@ -81,10 +81,16 @@ export const auth = getAuth(app);
      2. troque EXIGIR_CADASTRO para true
    ========================================================================== */
 
+// Dono do quadro: acesso total sempre, mesmo sem cadastro em kanban_acessos.
+// E a garantia de nunca ficar trancado do lado de fora da propria ferramenta.
+// O MESMO e-mail esta na funcao souDono() de firestore.rules - mudar aqui pede
+// mudar la tambem.
+export const EMAIL_DONO = "marcos.centrone@vrbelohorizonte.com.br";
+
 // Trava 1 - dominio. Lista VAZIA aceita qualquer conta Google (modo teste).
 // Preenchida, so entram e-mails terminados nestes dominios.
 export const DOMINIOS_PERMITIDOS = [
-  // "vrsoft.com.br",     // <- confirmar o dominio real com o Rodrigo
+  "vrbelohorizonte.com.br",
 ];
 
 // Excecoes pontuais a trava de dominio (consultores, conta de teste).
@@ -92,6 +98,13 @@ export const DOMINIOS_PERMITIDOS = [
 export const EMAILS_LIBERADOS = [
   // "marcos.centrone@gmail.com",
 ];
+
+// MODO ABERTO (temporario, para o primeiro cadastro)
+// Com true, o icone da area administrativa aparece para qualquer pessoa logada
+// e a pagina admin.html abre sem exigir a flag de administrador.
+//
+// >>> TROQUE PARA false assim que o primeiro administrador estiver cadastrado.
+export const ADMIN_ABERTO = true;
 
 // Trava 2 - cadastro. Com true, so entra quem tem documento em kanban_acessos.
 // Com false, quem nao esta cadastrado entra e ve todos os departamentos.

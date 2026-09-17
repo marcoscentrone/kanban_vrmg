@@ -228,3 +228,82 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
 }
 .sem-permissao h1{font-size:22px; margin:0 0 14px; color:var(--vr-orange);}
 .sem-permissao p{font-size:13.5px; line-height:1.6; color:var(--vr-text); margin:8px 0;}
+
+/* Campo de departamento: reforca visualmente que o valor e sempre maiusculo */
+#novoDepartamento{
+  text-transform:uppercase;
+  letter-spacing:0.3px;
+}
+.painel-hint.sem-margem{margin:6px 0 0; font-size:11px;}
+
+/* ---------- Listas (colunas) por departamento ---------- */
+.painel-largo{grid-column:1 / -1;}
+
+.listas-colunas{margin-top:14px;}
+.listas-colunas .item{border-left-color:var(--vr-graphite);}
+.listas-colunas .ordem{
+  flex-shrink:0;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  background:var(--vr-graphite);
+  color:var(--vr-white);
+  font-size:11px;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.listas-colunas .item:last-child .ordem{background:var(--vr-orange);}
+.listas-colunas .final{
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.4px;
+  color:var(--vr-orange-dark);
+  background:var(--orange-tint);
+  border:1px solid var(--orange-tint-2);
+  padding:2px 6px;
+  border-radius:4px;
+  margin-left:6px;
+}
+#depColunas{
+  flex:1 1 auto;
+  min-width:0;
+  padding:9px 11px;
+  border:1.5px solid var(--vr-gray);
+  border-radius:6px;
+  font-family:'Montserrat',sans-serif;
+  font-size:13.5px;
+  background:var(--vr-white);
+  color:var(--vr-black);
+}
+#depColunas:focus{outline:none; border-color:var(--vr-orange); box-shadow:0 0 0 3px var(--orange-tint);}
+#formColuna{margin-top:10px;}
+
+/* ---------- Subtarefas padrao ---------- */
+.sub-secao{
+  margin-top:22px;
+  padding-top:4px;
+  border-top:1px dashed var(--vr-gray);
+}
+.sub-secao .painel-head{border-bottom-color:var(--vr-graphite); margin-top:14px;}
+.sub-secao .contador{background:var(--vr-graphite);}
+
+.listas-subs{margin-top:12px;}
+.listas-subs .item{border-left-color:var(--vr-amber);}
+.listas-subs .ordem{
+  flex-shrink:0;
+  width:auto;
+  min-width:30px;
+  height:22px;
+  padding:0 7px;
+  border-radius:11px;
+  background:var(--vr-amber);
+  color:var(--vr-white);
+  font-size:11px;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}

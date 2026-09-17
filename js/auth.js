@@ -22,7 +22,7 @@
 
 import {
   auth, db, COLECAO_ACESSOS,
-  DOMINIOS_PERMITIDOS, EMAILS_LIBERADOS, EXIGIR_CADASTRO
+  DOMINIOS_PERMITIDOS, EMAILS_LIBERADOS, EXIGIR_CADASTRO, EMAIL_DONO
 } from "./firebase-config.js";
 import {
   GoogleAuthProvider,
@@ -56,6 +56,7 @@ if (DOMINIOS_PERMITIDOS.length === 1) {
 // Lista de dominios vazia = qualquer conta Google entra (modo teste).
 export function dominioPermitido(email) {
   if (!email) return false;
+  if (email === EMAIL_DONO.toLowerCase()) return true;
   if (EMAILS_LIBERADOS.map((e) => e.toLowerCase()).includes(email)) return true;
   if (!DOMINIOS_PERMITIDOS.length) return true;
   return DOMINIOS_PERMITIDOS.some((d) => email.endsWith("@" + d.toLowerCase()));
@@ -149,16 +150,25 @@ export async function carregarPermissao(email) {
   };
   if (!email) return semCadastro;
 
+  // O dono passa direto: acesso total sem depender de leitura do banco. Assim
+  // ele consegue configurar tudo mesmo com kanban_acessos ainda vazia.
+  if (email === EMAIL_DONO.toLowerCase()) {
+    return { departamentos: [], veTudo: true, admin: true, cadastrado: true, dono: true };
+  }
+
   try {
     const snap = await getDoc(doc(db, COLECAO_ACESSOS, email));
     if (!snap.exists()) return semCadastro;
 
     const dados = snap.data();
     const deps = Array.isArray(dados.departamentos) ? dados.departamentos.filter(Boolean) : [];
+    const admin = dados.admin === true;
     return {
       departamentos: deps,
-      veTudo: deps.length === 0,
-      admin: dados.admin === true,
+      // Administrador enxerga o quadro inteiro, mesmo com departamentos
+      // marcados no cadastro: quem administra precisa da visao completa.
+      veTudo: admin || deps.length === 0,
+      admin,
       cadastrado: true
     };
   } catch (e) {
@@ -172,16 +182,20 @@ export async function carregarPermissao(email) {
 // administrador, alguem precisa conseguir entrar para criar o primeiro.
 async function cadastroObrigatorioOk(permissao) {
   if (!EXIGIR_CADASTRO || permissao.cadastrado) return true;
-  return !(await existeAlgumAdmin());
+  return (await existeAlgumAdmin()) === false; // "erro" mantem a porta fechada
 }
 
-async function existeAlgumAdmin() {
+// Retorna true/false, ou a string "erro" quando nem deu para consultar - o que
+// quase sempre significa que as regras do Firestore ainda nao liberam
+// kanban_acessos. Quem chama precisa saber a diferenca entre "nao ha admin" e
+// "nao consegui verificar".
+export async function existeAlgumAdmin() {
   try {
     const snap = await getDocs(query(collection(db, COLECAO_ACESSOS), where("admin", "==", true), limit(1)));
     return !snap.empty;
   } catch (e) {
     console.error("[auth] falha ao verificar administradores:", e);
-    return true; // na duvida, nao abre a porta
+    return "erro";
   }
 }
 
@@ -255,9 +269,11 @@ export function montarBarraUsuario(container, { user, email, permissao }) {
     ? `<img class="user-foto" src="${user.photoURL}" alt="" referrerpolicy="no-referrer">`
     : `<span class="user-foto vazia">${(email[0] || "?").toUpperCase()}</span>`;
 
-  const alcance = permissao.veTudo
-    ? "vê todos os departamentos"
-    : `vê: ${permissao.departamentos.join(", ")}`;
+  const alcance = permissao.admin
+    ? "administrador — acesso total"
+    : permissao.veTudo
+      ? "vê todos os departamentos"
+      : `vê: ${permissao.departamentos.join(", ")}`;
 
   box.innerHTML = `
     ${foto}

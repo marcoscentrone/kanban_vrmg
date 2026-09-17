@@ -22,8 +22,10 @@ Projeto_Kambam/
 ├── js/
 │   ├── firebase-config.js  ÚNICO arquivo a trocar na migração
 │   ├── auth.js             Login Google + leitura de permissões
+│   ├── colunas.js          Listas de cada departamento (fluxo padrão, ids)
+│   ├── subtarefas.js       Etapas dentro da tarefa e o roteiro padrão
 │   ├── kanban.js           Render, drag & drop e CRUD das tarefas
-│   └── admin.js            CRUD de departamentos e acessos
+│   └── admin.js            CRUD de departamentos, listas e acessos
 ├── firestore.rules         Regras do Firestore
 ├── servidor.py             Servidor local sem cache
 ├── servir.bat              Atalho: sobe o servidor e abre o navegador
@@ -40,16 +42,17 @@ Um documento por tarefa (id gerado pelo Firestore via `addDoc`):
 |----------------|-----------|-----------|
 | `titulo`       | string    | Título da tarefa (obrigatório) |
 | `descricao`    | string    | Detalhes, opcional |
-| `coluna`       | string    | Id da coluna: `backlog` (exibida como "Demanda"), `analise`, `fazendo`, `aguardando`, `testando`, `finalizado` |
-| `departamento` | string    | Ex.: Suporte, Implantação, Desenvolvimento… (lista em `kanban.js`) |
-| `responsavel`  | string    | Nome de quem toca a tarefa (gera as iniciais do avatar) |
+| `coluna`       | string    | **Id** da lista dentro do fluxo do departamento (nunca o nome) |
+| `departamento` | string    | Nome do departamento dono do quadro (cadastrado em `kanban_departamentos`) |
+| `responsavel`  | string    | Para quem a tarefa foi direcionada. Vem preenchido com o nome de quem cria, mas é editável — **restrito aos nomes cadastrados** em `kanban_acessos`, sugeridos conforme se digita |
 | `prioridade`   | string    | `baixa` \| `media` \| `alta` (define a cor da borda esquerda) |
 | `inicioPrevisto` | string  | Projeção de início, `"AAAA-MM-DD"` (ou `""`) |
 | `fimPrevisto`  | string    | Projeção de término, `"AAAA-MM-DD"` (ou `""`) — fica vermelho no card se já passou |
 | `finalizadoEm` | timestamp | Quando entrou em *Finalizado* (base da retenção de 30 dias); `null` se for reaberta |
 | `criadoEm`     | timestamp | `serverTimestamp()` |
 | `atualizadoEm` | timestamp | `serverTimestamp()` |
-| `criadoPor`    | string    | Nome digitado em "Você é" |
+| `subtarefas`   | array     | Etapas da tarefa: `[{ id, nome, estado }]`, até 6. `estado`: `pendente` \| `fazendo` \| `feito` |
+| `criadoPor`    | string    | E-mail de quem criou — **dono da tarefa**, o único que pode excluí-la |
 
 **Ordenação:** não existe ordem manual. Dentro de cada coluna os cards se
 organizam sozinhos por urgência — os mais perto do término previsto no topo, os
@@ -57,6 +60,21 @@ folgados abaixo, e os **sem data de término sempre por último** (entre si, do
 mais antigo para o mais novo). Arrastar um card só muda a *coluna*; a posição é
 sempre consequência do prazo e se reorganiza quando alguém edita uma data ou o
 dia vira. Em *Finalizado* não há urgência: vale a ordem de criação.
+
+**Responsável:** só aceita nomes que existam em `kanban_acessos` — para
+direcionar a tarefa a alguém novo, cadastre a pessoa antes na área
+administrativa. Duas exceções, para não travar o uso: o nome que já estava
+gravado numa tarefa antiga continua aceito (senão seria impossível editar os
+outros campos dela), e se a lista de cadastrados não carregar o campo volta a
+ser livre, em vez de bloquear o quadro por um erro de permissão. O campo pode
+ficar vazio (tarefa sem responsável definido).
+
+**Dono x responsável:** `criadoPor` é o dono — ele e os **administradores** veem o
+botão *Excluir tarefa*.
+`responsavel` é quem deve executar, e qualquer pessoa pode alterá-lo. Tarefas sem dono registrado (as criadas antes do
+login, que guardaram texto livre como "anônimo" em vez de um e-mail) podem ser
+excluídas por qualquer um, senão ficariam impossíveis de limpar. A exceção é a limpeza das concluídas: passados os 30 dias,
+qualquer pessoa pode remover, independente de quem criou.
 
 **Retenção das concluídas:** uma tarefa movida para *Finalizado* ganha o carimbo
 `finalizadoEm`. Durante 30 dias o card mostra `⏳ sai em N dias`; passado o prazo
@@ -66,8 +84,27 @@ botão **Limpar N concluídas**, que qualquer pessoa pode usar (apaga em
 sempre uma ação de alguém. O prazo fica em `DIAS_RETENCAO`, em `js/kanban.js`.
 Mover a tarefa de volta para outra coluna zera a contagem.
 
-As **colunas não ficam no Firestore** — são fixas em `js/kanban.js` (`COLUNAS`),
-porque mudam raramente e assim o quadro abre já desenhado.
+**Listas por departamento:** cada departamento tem seu próprio fluxo, cadastrado
+na área administrativa e guardado em `kanban_departamentos/{id}.colunas` como
+`[{ id, nome }]`, no máximo **6**. O quadro trabalha sempre dentro de **um**
+departamento (o seletor do topo não tem "Todos"), porque fluxos diferentes não
+cabem lado a lado. Departamento sem listas próprias usa `COLUNAS_PADRAO`
+(`js/colunas.js`), que mantém os ids antigos para não orfanar tarefas.
+
+O campo `coluna` da tarefa guarda o **id** da lista, nunca o nome — por isso
+renomear uma lista não move nenhuma tarefa. Excluir uma lista é bloqueado
+enquanto houver tarefas nela.
+
+**Subtarefas:** a hierarquia é *departamento → lista → tarefa → subtarefa*. Cada
+departamento pode ter um **roteiro padrão** (`subtarefasPadrao`), cadastrado na
+área administrativa; toda tarefa criada ali já nasce com essas etapas copiadas
+para dentro de si. A cópia é proposital — mudar o roteiro depois **não** altera
+tarefas existentes, que já podem ter etapas concluídas.
+
+Cada etapa tem três estados, e um clique no card avança para o próximo:
+`○ a fazer → ◑ fazendo → ✓ feito`. O card mostra o progresso (`2/3`) e fica
+esverdeado quando todas terminam. No modal dá para renomear, reordenar pela
+remoção/adição, mudar estado e apagar etapas daquela tarefa específica.
 
 ---
 
@@ -79,7 +116,9 @@ O acesso é por **conta Google** (Firebase Authentication). O e-mail autenticado
 ### `kanban_departamentos/{id}`
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `nome` | string | Nome do departamento (ex.: Suporte) |
+| `nome` | string | CAIXA ALTA sem acentos (conversão automática no cadastro) |
+| `colunas` | array | Fluxo do departamento: `[{ id, nome }]`, até 6. Vazio = usa o padrão |
+| `subtarefasPadrao` | array | Nomes das etapas que toda tarefa nova do departamento recebe, até 6 |
 | `criadoEm` / `atualizadoEm` | timestamp | `serverTimestamp()` |
 
 As tarefas guardam o **nome** do departamento, não um id. Por isso renomear um
@@ -91,7 +130,7 @@ o usavam, e excluir é bloqueado enquanto houver tarefas usando.
 |---|---|---|
 | `email` | string | Minúsculo; é também o **id do documento**, o que impede duplicata |
 | `departamentos` | array | Nomes que a pessoa enxerga. **Vazio = vê tudo** |
-| `admin` | bool | Pode abrir `admin.html` |
+| `admin` | bool | Acesso total: abre `admin.html`, vê todos os departamentos e exclui qualquer tarefa |
 | `criadoEm` / `atualizadoEm` | timestamp | `serverTimestamp()` |
 
 Regra de visibilidade: com a lista de departamentos vazia, a pessoa vê todas as
@@ -104,25 +143,33 @@ ficam visíveis a todos para poderem ser classificadas).
 
 O portal da empresa usa duas barreiras (confirmado com o Rodrigo em 15/09/2026:
 *"a primeira é pelo domínio, ninguém acessa fora do domínio; e outra por nome"*).
-O Kanban segue a mesma estrutura. Ambas ficam em **`js/firebase-config.js`** e
-começam **desligadas**, para permitir os testes com conta pessoal:
+O Kanban segue a mesma estrutura, em **`js/firebase-config.js`**:
 
 ```js
-// Trava 1 — domínio. Lista vazia = aceita qualquer conta Google.
-export const DOMINIOS_PERMITIDOS = [
-  // "vrsoft.com.br",     // <- confirmar o domínio real com o Rodrigo
-];
+// Dono do quadro: acesso total sempre, sem depender de cadastro.
+// O MESMO e-mail está em souDono(), em firestore.rules.
+export const EMAIL_DONO = "marcos.centrone@vrbelohorizonte.com.br";
+
+// Trava 1 — domínio (ATIVA). Lista vazia aceitaria qualquer conta Google.
+export const DOMINIOS_PERMITIDOS = ["vrbelohorizonte.com.br"];
 
 // Exceções pontuais (consultor, conta de teste). Esvazie em produção.
 export const EMAILS_LIBERADOS = [];
+
+// Modo aberto — TEMPORÁRIO, para o primeiro cadastro.
+export const ADMIN_ABERTO = true;   // <- false depois do 1º administrador
 
 // Trava 2 — cadastro. true = só entra quem está em kanban_acessos.
 export const EXIGIR_CADASTRO = false;
 ```
 
-Para valer a regra da empresa: preencha `DOMINIOS_PERMITIDOS` e troque
-`EXIGIR_CADASTRO` para `true`. Quem for barrado vê a explicação na tela de login,
-em vez de uma página quebrada.
+**Checklist para fechar o ambiente**, depois de cadastrar a equipe:
+
+1. `ADMIN_ABERTO` → `false` (o ícone ⚙ volta a aparecer só para administradores)
+2. `EXIGIR_CADASTRO` → `true` (só entra quem está em `kanban_acessos`)
+3. Em `firestore.rules`, `modoAberto()` → `return false;` e republicar
+
+Quem for barrado vê a explicação na tela de login, em vez de uma página quebrada.
 
 ### Primeiro acesso
 Enquanto **nenhum** administrador existir, o primeiro usuário autenticado

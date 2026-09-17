@@ -25,12 +25,10 @@
     <div class="actions-row">
       <div class="who">
         <label for="filtroDepartamento">Departamento:</label>
-        <select id="filtroDepartamento">
-          <option value="">Todos</option>
-        </select>
+        <select id="filtroDepartamento"></select>
       </div>
 
-      <a class="btn-ghost" href="admin.html" title="Departamentos e permissões" id="linkAdmin" style="display:none;">⚙ Administração</a>
+      <a class="icone-admin" href="admin.html" id="linkAdmin" style="display:none;" title="Administração — departamentos e acessos" aria-label="Área administrativa">⚙</a>
 
       <div id="barraUsuario"></div>
 
@@ -69,7 +67,10 @@
 
     <div class="field">
       <label for="fAssignee">Responsável</label>
-      <input id="fAssignee" maxlength="20" placeholder="Nome" autocomplete="off">
+      <input id="fAssignee" maxlength="40" placeholder="Nome de quem vai executar"
+             list="listaPessoas" autocomplete="off">
+      <datalist id="listaPessoas"></datalist>
+      <p class="field-hint" id="hintResponsavel">Comece a digitar para ver quem está cadastrado. Pode ser outra pessoa.</p>
     </div>
 
     <div class="field-row">
@@ -91,6 +92,24 @@
         <option value="media" selected>Média</option>
         <option value="alta">Alta</option>
       </select>
+    </div>
+
+    <div class="field">
+      <div class="label-linha">
+        <label>Subtarefas</label>
+        <span class="contador-sub" id="contaSubsModal">0/6</span>
+      </div>
+      <div id="subsModal"></div>
+      <div class="form-linha" id="addSubBox">
+        <input id="novaSubModal" maxlength="40" placeholder="Nova etapa" autocomplete="off">
+        <button type="button" class="btn-ghost" id="addSub">Adicionar</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Dono da tarefa</label>
+      <div class="campo-dono" id="fDono">—</div>
+      <p class="field-hint" id="hintDono">Quem criou a tarefa. Só o dono pode excluí-la.</p>
     </div>
 
     <div class="modal-error" id="modalError"></div>

@@ -47,9 +47,11 @@
       </p>
 
       <form class="form-linha" id="formDepartamento">
-        <input id="novoDepartamento" maxlength="40" placeholder="Nome do departamento" autocomplete="off" required>
+        <input id="novoDepartamento" maxlength="40" placeholder="NOME DO DEPARTAMENTO"
+               autocomplete="off" required spellcheck="false">
         <button class="btn-primary" type="submit">Adicionar</button>
       </form>
+      <p class="painel-hint sem-margem">Sempre em CAIXA ALTA e sem acentos — a conversão é automática.</p>
       <div class="erro" id="erroDepartamento"></div>
 
       <ul class="lista" id="listaDepartamentos"></ul>
@@ -67,7 +69,7 @@
       </p>
 
       <form class="form-acesso" id="formAcesso">
-        <input id="novoEmail" type="email" maxlength="80" placeholder="nome@vrsoft.com.br" autocomplete="off" required>
+        <input id="novoEmail" type="email" maxlength="80" placeholder="nome@vrbelohorizonte.com.br" autocomplete="off" required>
         <div class="checkboxes" id="checkboxesDepartamentos"></div>
         <label class="check-admin">
           <input type="checkbox" id="ehAdmin">
@@ -82,6 +84,52 @@
       <div class="erro" id="erroAcesso"></div>
 
       <ul class="lista" id="listaAcessos"></ul>
+    </section>
+
+    <!-- ============ Listas (colunas) por departamento ============ -->
+    <section class="painel painel-largo">
+      <div class="painel-head">
+        <h2>Listas do departamento</h2>
+        <span class="contador" id="contaColunas">0</span>
+      </div>
+      <p class="painel-hint">
+        As colunas do quadro, por departamento — no máximo 6. O quadro sempre mostra
+        o fluxo do departamento escolhido.
+      </p>
+
+      <div class="form-linha">
+        <select id="depColunas">
+          <option value="">— escolha um departamento —</option>
+        </select>
+        <button class="btn-ghost" type="button" id="usarPadrao">Usar fluxo padrão</button>
+      </div>
+
+      <ul class="lista listas-colunas" id="listaColunas"></ul>
+
+      <form class="form-linha" id="formColuna" style="display:none;">
+        <input id="novaColuna" maxlength="24" placeholder="Nome da lista (ex: Fazendo)" autocomplete="off" required>
+        <button class="btn-primary" type="submit" id="btnAddColuna">Adicionar</button>
+      </form>
+      <div class="erro" id="erroColuna"></div>
+
+      <div class="sub-secao">
+        <div class="painel-head">
+          <h2>Subtarefas padrao</h2>
+          <span class="contador" id="contaSubs">0</span>
+        </div>
+        <p class="painel-hint">
+          Etapas que toda tarefa nova deste departamento ja recebe &mdash; no maximo 6.
+          Mudar o roteiro depois nao altera as tarefas que ja existem.
+        </p>
+
+        <ul class="lista listas-subs" id="listaSubs"></ul>
+
+        <form class="form-linha" id="formSub" style="display:none;">
+          <input id="novaSub" maxlength="40" placeholder="Nome da etapa (ex: Fazer reuniao)" autocomplete="off" required>
+          <button class="btn-primary" type="submit">Adicionar</button>
+        </form>
+        <div class="erro" id="erroSub"></div>
+      </div>
     </section>
 
   </div>
