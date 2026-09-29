@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório — Quadro de Fluxo</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/kanban.css">
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="css/auth.css">
+<link rel="stylesheet" href="css/relatorio.css">
+</head>
+<body>
+
+<div class="board-shell">
+
+  <div class="topbar">
+    <div>
+      <h1>Relatório de <span>Tarefas</span></h1>
+      <p>VR Software — Unidade Minas Gerais · tarefas e etapas por período</p>
+    </div>
+    <div class="actions-row">
+      <a class="btn-ghost" href="index.html">← Voltar ao quadro</a>
+      <div id="barraUsuario"></div>
+      <div class="live-badge" id="liveBadge">
+        <span class="live-dot"></span>
+        <span id="liveText">conectando…</span>
+      </div>
+    </div>
+  </div>
+
+  <nav class="submenu">
+    <a href="admin.html">Configuração</a>
+    <a href="relatorio.html" class="ativo" aria-current="page">Relatório</a>
+  </nav>
+
+  <div class="filtros">
+    <div class="who">
+      <label for="filtroDep">Departamento:</label>
+      <select id="filtroDep"></select>
+    </div>
+    <div class="who">
+      <label for="filtroLista">Lista:</label>
+      <select id="filtroLista"><option value="">Todas</option></select>
+    </div>
+    <div class="who">
+      <label for="filtroResp">Responsável:</label>
+      <select id="filtroResp"><option value="">Todos</option></select>
+    </div>
+    <div class="who">
+      <label for="filtroDe">Período de:</label>
+      <input id="filtroDe" type="date">
+    </div>
+    <div class="who">
+      <label for="filtroAte">até:</label>
+      <input id="filtroAte" type="date">
+    </div>
+    <button class="btn-ghost" type="button" id="limparPeriodo">Limpar período</button>
+    <button class="btn-ghost" type="button" id="exportarCsv">Exportar CSV</button>
+  </div>
+
+  <div class="status-line" id="statusLine">Carregando tarefas…</div>
+
+  <div class="tabela-wrap">
+    <table class="tabela-rel" id="tabela">
+      <thead>
+        <tr>
+          <th class="col-titulo">Tarefa / Etapa</th>
+          <th class="col-estado">Estado</th>
+          <th class="col-lista">Lista</th>
+          <th class="col-data">Início</th>
+          <th class="col-data">Fim</th>
+          <th class="col-prazo">Prazo</th>
+        </tr>
+      </thead>
+      <tbody id="corpo"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script type="module" src="js/relatorio.js"></script>
+</body>
+</html>

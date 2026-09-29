@@ -1,0 +1,204 @@
+/* ==========================================================================
+   relatorio.css - Tela de relatorio (tarefas e etapas em linhas)
+   ========================================================================== */
+
+/* ---------- Submenu (Configuracao | Relatorio) ---------- */
+.submenu{
+  display:flex;
+  gap:4px;
+  margin:-6px 0 18px;
+  border-bottom:1.5px solid var(--vr-gray-light);
+}
+.submenu a{
+  padding:9px 18px;
+  font-size:13.5px;
+  font-weight:600;
+  color:var(--vr-text);
+  text-decoration:none;
+  border-bottom:3px solid transparent;
+  margin-bottom:-1.5px;
+  transition:color .15s, border-color .15s;
+}
+.submenu a:hover{color:var(--vr-black);}
+.submenu a.ativo{
+  color:var(--vr-orange-dark);
+  border-bottom-color:var(--vr-orange);
+}
+
+/* ---------- Filtros ---------- */
+.filtros{
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px;
+  align-items:center;
+  margin-bottom:12px;
+  padding:12px 14px;
+  background:var(--vr-surface);
+  border:1px solid var(--vr-gray-light);
+  border-radius:8px;
+}
+.filtros select,
+.filtros input[type="date"]{
+  font-family:'Montserrat',sans-serif;
+  font-size:13.5px;
+  padding:7px 10px;
+  border:1.5px solid var(--vr-gray);
+  border-radius:6px;
+  background:var(--vr-white);
+  color:var(--vr-black);
+}
+.filtros select:focus,
+.filtros input:focus{
+  outline:none;
+  border-color:var(--vr-orange);
+  box-shadow:0 0 0 3px var(--orange-tint);
+}
+.filtros .btn-ghost{padding:7px 13px;}
+
+/* ---------- Tabela ---------- */
+.tabela-wrap{
+  overflow-x:auto;
+  border:1px solid var(--vr-gray-light);
+  border-radius:8px;
+}
+
+.tabela-rel{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+  background:var(--vr-white);
+}
+
+.tabela-rel thead th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:var(--vr-graphite);
+  color:var(--vr-white);
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  text-align:left;
+  padding:10px 12px;
+  white-space:nowrap;
+  border-bottom:3px solid var(--vr-orange);
+}
+
+.tabela-rel td{
+  padding:8px 12px;
+  border-bottom:1px solid var(--vr-gray-light);
+  vertical-align:middle;
+}
+
+.col-titulo{min-width:280px;}
+.col-estado{width:130px; white-space:nowrap;}
+.col-lista{width:130px; white-space:nowrap;}
+.col-data{width:110px; white-space:nowrap;}
+.col-prazo{width:190px; white-space:nowrap;}
+
+/* ---------- Linha da tarefa ---------- */
+/* Cada tarefa abre um bloco novo: a linha escura acima separa visualmente
+   uma tarefa (com suas etapas) da anterior. */
+.linha-tarefa td{
+  /* a linha da tarefa ja vem destacada em laranja claro - e o titulo do bloco,
+     nao precisa de hover para se distinguir das etapas abaixo */
+  background:var(--orange-tint);
+  border-top:2px solid var(--vr-graphite);
+  padding-top:12px;
+}
+/* a primeira linha ja tem o cabecalho como divisor */
+.tabela-rel tbody tr:first-child td{border-top:none;}
+.linha-tarefa:hover td{background:var(--orange-tint-2);}
+
+/* O flex fica num wrapper, nunca no proprio <td>: um td com display:flex sai
+   do modelo de tabela e a borda dele deixa de colapsar com as das outras
+   celulas - o separador escuro quebrava ao chegar na coluna Estado. */
+.celula-flex{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.linha-tarefa strong{font-weight:700; color:var(--vr-black);}
+
+.bolinha{
+  width:10px; height:10px;
+  border-radius:50%;
+  flex-shrink:0;
+  box-shadow:0 0 0 2px var(--vr-white), 0 0 0 3px rgba(0,0,0,0.08);
+}
+
+.etapas-resumo{
+  font-size:10px;
+  font-weight:700;
+  color:var(--vr-gray-dark);
+  background:var(--vr-surface);
+  border:1px solid var(--vr-gray-light);
+  padding:1px 7px;
+  border-radius:9px;
+}
+
+.resp{
+  font-size:11px;
+  color:var(--vr-text);
+  font-weight:500;
+}
+
+.tag-ok{
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.4px;
+  color:var(--vr-white);
+  background:var(--live-green);
+  padding:2px 8px;
+  border-radius:4px;
+}
+
+.col-prazo.atrasada{color:var(--danger); font-weight:700;}
+
+/* ---------- Linhas das etapas ---------- */
+.linha-sub td{
+  background:#FBFAF8;
+  font-size:12.5px;
+  color:var(--vr-gray-dark);
+  padding-top:5px;
+  padding-bottom:5px;
+  border-bottom:1px solid #F1EFEB;
+}
+.linha-sub:hover td{background:var(--vr-surface);}
+
+.sub-titulo{
+  padding-left:30px !important;   /* recuo: a etapa pertence a tarefa acima */
+}
+.linha-sub .sub-num{
+  font-size:10px;
+  font-weight:700;
+  color:var(--vr-text);
+  flex-shrink:0;
+}
+.linha-sub.feito .sub-nome{text-decoration:line-through; opacity:0.6;}
+
+/* chip de estado, com a cor do cronograma no fundo */
+.estado-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-size:11px;
+  font-weight:600;
+  padding:3px 9px;
+  border-radius:11px;
+  background-color:var(--vr-white);
+  background-image:linear-gradient(var(--cor-sub, transparent), var(--cor-sub, transparent));
+  border:1px solid var(--vr-gray-light);
+  color:#1a1508;
+  white-space:nowrap;
+}
+
+.vazio{
+  text-align:center;
+  padding:26px 10px !important;
+  color:var(--vr-text);
+  font-style:italic;
+}
+
+@media (max-width:640px){
+  .filtros{gap:10px; padding:10px;}
+  .col-titulo{min-width:200px;}
+}

@@ -22,6 +22,12 @@ import {
   gerarIdSubtarefa, subtarefasIniciais, progresso
 } from "./subtarefas.js";
 import {
+  MS_POR_DIA, hojeISO, formatarDataISO,
+  progressoPrazo as progressoPrazoBase, corDoPrazo, OPACIDADE_SUBTAREFA,
+  janelasDasSubtarefas, tituloSubtarefa,
+  coresDasSubtarefas as coresDasSubtarefasBase
+} from "./cronograma.js";
+import {
   collection,
   doc,
   addDoc,
@@ -55,11 +61,7 @@ function colunaFinal() {
   return COLUNAS.length ? COLUNAS[COLUNAS.length - 1].id : "finalizado";
 }
 
-// Janela em que uma tarefa comeca a "esquentar" pela proximidade da data:
-// a 14 dias do termino ela sai do verde e caminha para o vermelho.
-const JANELA_ALERTA_DIAS = 14;
 const DIAS_RETENCAO = 30;
-const MS_POR_DIA = 86400000;
 
 /* --------------------------------------------------------------------------
    2. Estado local (espelho do Firestore, alimentado pelo onSnapshot)
@@ -122,38 +124,6 @@ function formatarData(ts) {
   if (!ts || typeof ts.toDate !== "function") return "";
   const d = ts.toDate();
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-}
-
-// Datas de projecao sao gravadas como texto "AAAA-MM-DD" (o mesmo formato do
-// <input type="date">). Assim nao ha deslocamento de fuso horario e a
-// comparacao/ordenacao funciona por simples comparacao de strings.
-function hojeISO() {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
-function formatarDataISO(iso) {
-  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}` + (ano !== String(new Date().getFullYear()) ? `/${ano.slice(2)}` : "");
-}
-
-// Soma dias a uma data "AAAA-MM-DD" e devolve no mesmo formato.
-function somarDias(iso, n) {
-  const d = new Date(iso + "T00:00:00");
-  d.setDate(d.getDate() + n);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
-// Diferenca em dias entre duas datas "AAAA-MM-DD" (b - a).
-function diasEntre(isoA, isoB) {
-  return Math.round(
-    (new Date(isoB + "T00:00:00") - new Date(isoA + "T00:00:00")) / MS_POR_DIA
-  );
 }
 
 // O dono e um e-mail. Tarefas criadas antes do login guardaram texto livre
@@ -597,69 +567,10 @@ function renderCard(col, card) {
   return div;
 }
 
-// Quao perto a tarefa esta do termino previsto, de 0 (recem-comecada) a 1
-// (no prazo final ou vencida). Retorna null quando nao da para medir.
+// Repassa para o modulo de cronograma, informando se a coluna e a de
+// conclusao (onde nao ha mais prazo a cobrar).
 function progressoPrazo(card, col) {
-  // Tarefa concluida nao tem "proximidade do fim" - ela ja acabou.
-  if (col.id === colunaFinal() || !card.fimPrevisto) return null;
-
-  const hoje = new Date(hojeISO() + "T00:00:00");
-  const fim = new Date(card.fimPrevisto + "T00:00:00");
-  if (hoje >= fim) return 1; // venceu hoje ou ja passou
-
-  // (a) Proximidade no calendario: quanto falta para a data, sem olhar o
-  //     tamanho do prazo. Vence amanha = quase 1, mesmo que tenha comecado hoje.
-  const diasAteFim = (fim - hoje) / MS_POR_DIA;
-  const porCalendario = Math.min(1, Math.max(0, 1 - diasAteFim / JANELA_ALERTA_DIAS));
-
-  // (b) Fatia do prazo ja consumida, quando ha inicio previsto. Uma tarefa de
-  //     6 meses com 90% do tempo gasto ja merece atencao, ainda que a data
-  //     final esteja longe.
-  let porPrazo = 0;
-  if (card.inicioPrevisto && card.inicioPrevisto < card.fimPrevisto) {
-    const ini = new Date(card.inicioPrevisto + "T00:00:00");
-    porPrazo = Math.min(1, Math.max(0, (hoje - ini) / (fim - ini)));
-  }
-
-  // Vale o pior dos dois criterios: o que estiver mais perto do vermelho.
-  return Math.max(porCalendario, porPrazo);
-}
-
-// Cor da bolinha de prazo, de 0 (inicio, folgado) a 1 (vencido).
-//
-// A interpolacao acontece em HSL entre tres ancoras, NUNCA em RGB: misturar
-// verde e vermelho no espaco RGB produz marrom, e reduzir saturacao/luminosidade
-// no meio do caminho produz oliva e vinho. Aqui a saturacao nunca cai abaixo de
-// 71%, entao toda a escala continua viva.
-//
-//   p = 0.0  ->  #22c55e  verde
-//   p = 0.5  ->  #eab308  amarelo
-//   p = 1.0  ->  #ef4444  vermelho
-// >>> INTENSIDADE DAS CAIXAS DE SUBTAREFA <<<
-// 1 = cor cheia (forte)   0.5 = metade   0.25 = bem suave
-// So afeta o fundo das subtarefas; a bolinha do card continua solida.
-const OPACIDADE_SUBTAREFA = 0.30;
-
-const ANCORAS_PRAZO = [
-  { h: 142, s: 71, l: 45 },   // verde
-  { h: 45,  s: 93, l: 47 },   // amarelo
-  { h: 0,   s: 84, l: 60 }    // vermelho
-];
-
-function corDoPrazo(p, opacidade = 1) {
-  const t = Math.min(1, Math.max(0, p));
-
-  // Metade do caminho: verde -> amarelo. Depois: amarelo -> vermelho.
-  const [de, para, fatia] = t < 0.5
-    ? [ANCORAS_PRAZO[0], ANCORAS_PRAZO[1], t / 0.5]
-    : [ANCORAS_PRAZO[1], ANCORAS_PRAZO[2], (t - 0.5) / 0.5];
-
-  const entre = (a, b) => a + (b - a) * fatia;
-  const h = Math.round(entre(de.h, para.h));
-  const sat = Math.round(entre(de.s, para.s));
-  const luz = Math.round(entre(de.l, para.l));
-
-  return `hsla(${h}, ${sat}%, ${luz}%, ${opacidade})`;
+  return progressoPrazoBase(card, col.id === colunaFinal());
 }
 
 // Bolinha no canto superior direito. A cor percorre o circulo HSL de 120 (verde)
@@ -682,122 +593,9 @@ function renderBolinha(card, col) {
   return `<span class="task-dot" style="background:${cor}" title="${escapeHtml(texto)}"></span>`;
 }
 
-// Janela de datas de cada subtarefa pendente.
-//
-// O tempo que ainda resta do card (de hoje ate o termino previsto) e dividido
-// igualmente entre as R pendentes, em blocos sequenciais:
-//
-//   30 dias / 5 etapas -> 6 dias cada
-//   1-1: 17/09 a 23/09   1-2: 24/09 a 29/09   1-3: 30/09 a 05/10 ...
-//
-// Concluir uma etapa antes do prazo nao sobra tempo no vazio: as pendentes
-// recalculam e ganham blocos maiores, porque passam a dividir o mesmo resto
-// entre menos gente.
-function janelasDasSubtarefas(card) {
-  const janelas = new Map();
-  if (!card.fimPrevisto) return janelas;
-
-  const hoje = hojeISO();
-  // Se a tarefa ainda nem comecou, o cronograma parte da data de inicio.
-  const base =
-    card.inicioPrevisto && card.inicioPrevisto > hoje ? card.inicioPrevisto : hoje;
-
-  const pendentes = (card.subtarefas || []).filter((s) => s.estado !== "feito");
-  if (!pendentes.length) return janelas;
-
-  const totalDias = diasEntre(base, card.fimPrevisto);
-  if (totalDias < 0) {
-    // Prazo do card ja venceu: nao ha bloco a distribuir.
-    pendentes.forEach((s) => janelas.set(s.id, { vencido: true }));
-    return janelas;
-  }
-
-  const passo = totalDias / pendentes.length;
-  let inicio = base;
-
-  pendentes.forEach((sub, i) => {
-    const fim = somarDias(base, Math.round((i + 1) * passo));
-    janelas.set(sub.id, { inicio, fim, vencido: false });
-    inicio = somarDias(fim, 1);
-  });
-
-  return janelas;
-}
-
-// Texto do tooltip. Distingue duas coisas que se confundem facilmente:
-//   - o TAMANHO da janela da etapa (quanto tempo ela tem para ser feita)
-//   - QUANDO essa janela vence (contado de hoje)
-// A 1a etapa comeca hoje, entao para ela as duas informacoes coincidem.
-function tituloSubtarefa(sub, janela) {
-  const info = ESTADO_INFO[sub.estado] || ESTADO_INFO.pendente;
-
-  if (sub.estado === "feito") return "concluída";
-  if (!janela) return `${info.rotulo} — clique para mudar`;
-  if (janela.vencido) return `${info.rotulo} — prazo do card vencido
-Clique para mudar`;
-
-  const hoje = hojeISO();
-  const ateOFim = diasEntre(hoje, janela.fim);
-  const ateOComeco = diasEntre(hoje, janela.inicio);
-  const tamanho = diasEntre(janela.inicio, janela.fim) + 1;
-
-  const prazo = `${formatarDataISO(janela.inicio)} a ${formatarDataISO(janela.fim)}`;
-  const dia = (n) => `${n} ${n === 1 ? "dia" : "dias"}`;
-
-  let tempo;
-  if (ateOFim < 0) {
-    tempo = `atrasada ${dia(-ateOFim)}`;
-  } else if (ateOComeco <= 0) {
-    // Ja e a vez dela: o que importa e quanto falta para terminar.
-    tempo = ateOFim === 0 ? "termina hoje" : `faltam ${dia(ateOFim)} para terminar`;
-  } else {
-    // Ainda vai comecar: mostra o tamanho da janela e quando ela abre.
-    tempo = `${dia(tamanho)} de prazo · começa em ${dia(ateOComeco)}`;
-  }
-
-  return `${info.rotulo} · ${prazo}
-${tempo}
-Clique para mudar`;
-}
-
-// Cor de cada subtarefa: ORDEM DE URGENCIA.
-//
-// Concluidas ficam VERDES para sempre - saem da fila e do rateio.
-//
-// Entre as R pendentes, a 1a e a que precisa sair agora (mais quente) e a
-// ultima e a mais folgada (verde). Esse gradiente e entao deslocado pelo
-// quanto o card ja consumiu do proprio prazo:
-//
-//     urgencia(i) = p + (1 - p) * (1 - i / R)
-//
-// Consequencias:
-//   . card no inicio (p=0)  -> gradiente cheio: 1a quente, ultima verde
-//   . card vencido (p=1)    -> todas vermelhas, nao importa a posicao
-//   . concluir uma etapa    -> R diminui, as restantes esfriam (mais folga
-//                              por etapa)
-//   . sobrou 1 etapa e muito prazo -> ela fica verde
+// Repassa para o modulo de cronograma (ver coresDasSubtarefas la).
 function coresDasSubtarefas(card, col) {
-  const subs = card.subtarefas || [];
-  const cores = new Map();
-  if (!subs.length) return cores;
-
-  const p = progressoPrazo(card, col);          // null = sem data de termino
-  const pendentes = subs.filter((s) => s.estado !== "feito");
-  const total = pendentes.length;
-
-  subs.forEach((s) => {
-    if (s.estado === "feito") cores.set(s.id, corDoPrazo(0, OPACIDADE_SUBTAREFA));
-  });
-
-  if (p === null) return cores;                 // sem cronograma: pendentes neutras
-
-  pendentes.forEach((s, i) => {
-    const posicaoNaFila = 1 - (i + 1) / total;  // 1a = mais alta, ultima = 0
-    const urgencia = p + (1 - p) * posicaoNaFila;
-    cores.set(s.id, corDoPrazo(urgencia, OPACIDADE_SUBTAREFA));
-  });
-
-  return cores;
+  return coresDasSubtarefasBase(card, col.id === colunaFinal());
 }
 
 // Etapas da tarefa. Cada uma mostra o estado e avanca no clique:
