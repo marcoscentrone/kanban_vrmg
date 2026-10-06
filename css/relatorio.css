@@ -202,3 +202,66 @@
   .filtros{gap:10px; padding:10px;}
   .col-titulo{min-width:200px;}
 }
+
+/* ---------- Trilha de auditoria ---------- */
+.col-quando{width:120px; white-space:nowrap; color:var(--vr-text); font-size:12px;}
+.col-quem{width:150px; white-space:nowrap;}
+.col-mudanca{min-width:320px;}
+
+.linha-dia td{
+  background:var(--vr-graphite);
+  color:var(--vr-white);
+  font-size:10.5px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.8px;
+  padding:5px 12px;
+}
+
+.linha-aud td{background:var(--vr-white); border-top:1px solid var(--vr-gray-light);}
+.linha-aud:hover td{background:var(--vr-surface);}
+/* Registro de etapa: so o fundo distingue, sem recuo. A coluna Tarefa mostra
+   sempre o nome da TAREFA, entao indentar nao indicaria hierarquia alguma -
+   apenas desalinharia a coluna. */
+.linha-aud.de-etapa td{background:#FBFAF8;}
+
+.quem-chip{
+  font-size:11.5px;
+  font-weight:600;
+  color:var(--vr-gray-dark);
+  background:var(--vr-surface);
+  border:1px solid var(--vr-gray-light);
+  padding:2px 9px;
+  border-radius:11px;
+  white-space:nowrap;
+}
+
+.acao{font-size:12.5px; color:var(--vr-gray-dark);}
+.acao.excluiu, .acao.sub_del{color:var(--danger); font-weight:600;}
+.acao.criou, .acao.sub_add{color:var(--vr-orange-dark); font-weight:600;}
+
+.de-para{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin-top:4px;
+  font-size:12px;
+  flex-wrap:wrap;
+}
+.de-para .antes{
+  background:rgba(220,53,69,0.10);
+  border:1px solid rgba(220,53,69,0.25);
+  color:var(--vr-gray-dark);
+  padding:1px 8px;
+  border-radius:4px;
+  text-decoration:line-through;
+}
+.de-para .seta{color:var(--vr-gray);}
+.de-para .depois{
+  background:rgba(97,206,112,0.14);
+  border:1px solid rgba(97,206,112,0.35);
+  color:var(--vr-black);
+  padding:1px 8px;
+  border-radius:4px;
+  font-weight:600;
+}

@@ -73,6 +73,21 @@ service cloud.firestore {
       allow write: if modoAberto() || souAdmin();
     }
 
+    // ---------------- Auditoria ----------------
+    // Trilha de alteracoes: quem mudou o que, e quando.
+    //
+    // Escrita: qualquer pessoa logada CRIA registros (e o proprio app que grava
+    // ao salvar uma tarefa). Mas ninguem edita nem apaga um registro - nem
+    // administrador. Uma trilha que pode ser reescrita nao serve como trilha.
+    //
+    // Leitura: so administradores. O historico mostra o que foi alterado em
+    // todos os departamentos.
+    match /kanban_auditoria/{registroId} {
+      allow read:   if modoAberto() || souAdmin();
+      allow create: if modoAberto() || logado();
+      allow update, delete: if false;
+    }
+
     // Qualquer outra colecao continua bloqueada.
   }
 }

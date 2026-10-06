@@ -47,6 +47,12 @@ export const COLECAO_CARDS = "kanban_cards";
 export const COLECAO_DEPARTAMENTOS = "kanban_departamentos";
 export const COLECAO_ACESSOS = "kanban_acessos";
 
+// Trilha de auditoria: um documento por alteracao (quem, o que, quando).
+//   kanban_auditoria/{id} -> { tarefaId, tarefaTitulo, departamento,
+//                              acao, alvo, campo, de, para,
+//                              porEmail, porNome, em }
+export const COLECAO_AUDITORIA = "kanban_auditoria";
+
 // Ambiente atual - usado so para exibir um aviso discreto na tela.
 // Troque para "producao" quando apontar para o Firebase da empresa.
 export const AMBIENTE = "teste";

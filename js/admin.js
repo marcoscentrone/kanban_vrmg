@@ -344,6 +344,80 @@ async function excluirDepartamento(dep) {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Reordenar arrastando                                                       */
+/* -------------------------------------------------------------------------- */
+
+let arrastandoIndice = null;
+
+// Liga o arrasta-e-solta num item de lista. `aoSoltar(de, para)` recebe os dois
+// indices e grava a nova ordem. As setas continuam funcionando - sao o caminho
+// acessivel por teclado e o unico que funciona no celular.
+function ligarArrasto(li, indice, aoSoltar) {
+  li.draggable = true;
+  li.dataset.indice = indice;
+
+  li.addEventListener("dragstart", (e) => {
+    // Arrastar a partir dos botoes de acao nao deve mover a linha.
+    if (e.target.closest(".item-acoes")) { e.preventDefault(); return; }
+    arrastandoIndice = indice;
+    li.classList.add("arrastando");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(indice));
+  });
+
+  li.addEventListener("dragend", () => {
+    arrastandoIndice = null;
+    li.classList.remove("arrastando");
+    li.parentElement.querySelectorAll(".item").forEach((x) =>
+      x.classList.remove("solta-acima", "solta-abaixo")
+    );
+  });
+
+  li.addEventListener("dragover", (e) => {
+    if (arrastandoIndice === null || arrastandoIndice === indice) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+
+    // Metade de cima = entra antes; metade de baixo = entra depois.
+    const r = li.getBoundingClientRect();
+    const antes = e.clientY < r.top + r.height / 2;
+    li.classList.toggle("solta-acima", antes);
+    li.classList.toggle("solta-abaixo", !antes);
+  });
+
+  li.addEventListener("dragleave", () => {
+    li.classList.remove("solta-acima", "solta-abaixo");
+  });
+
+  li.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    const de = arrastandoIndice;
+    li.classList.remove("solta-acima", "solta-abaixo");
+    if (de === null || de === indice) return;
+
+    const r = li.getBoundingClientRect();
+    const antes = e.clientY < r.top + r.height / 2;
+
+    // Ao tirar o item de cima da lista, tudo abaixo sobe uma posicao - por isso
+    // o destino desconta 1 quando o item vinha de antes do alvo.
+    let destino = antes ? indice : indice + 1;
+    if (de < destino) destino -= 1;
+    if (destino === de) return;
+
+    arrastandoIndice = null;
+    await aoSoltar(de, destino);
+  });
+}
+
+// Move um item de posicao dentro de um array (copia).
+function reordenar(lista, de, para) {
+  const copia = [...lista];
+  const [item] = copia.splice(de, 1);
+  copia.splice(para, 0, item);
+  return copia;
+}
+
 /* ========================================================================== */
 /* 1b. Listas (colunas) de cada departamento                                  */
 /* ========================================================================== */
@@ -420,6 +494,11 @@ function renderColunas() {
     li.querySelector('[data-acao="descer"]').onclick = () => moverColuna(i, 1);
     li.querySelector('[data-acao="editar"]').onclick = () => renomearColuna(i);
     li.querySelector('[data-acao="excluir"]').onclick = () => excluirColuna(i);
+
+    ligarArrasto(li, i, async (de, para) => {
+      await salvarColunas(reordenar(colunasEditaveis(), de, para));
+    });
+
     ul.appendChild(li);
   });
 }
@@ -579,6 +658,11 @@ function renderSubs() {
     li.querySelector('[data-acao="descer"]').onclick = () => moverSub(i, 1);
     li.querySelector('[data-acao="editar"]').onclick = () => renomearSub(i);
     li.querySelector('[data-acao="excluir"]').onclick = () => excluirSub(i);
+
+    ligarArrasto(li, i, async (de, para) => {
+      await salvarSubs(reordenar(subsEditaveis(), de, para));
+    });
+
     ul.appendChild(li);
   });
 }

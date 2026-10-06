@@ -18,6 +18,10 @@ import {
 import { protegerPagina, montarBarraUsuario, existeAlgumAdmin } from "./auth.js";
 import { COLUNAS_PADRAO, lerColunas, colunasDe } from "./colunas.js";
 import {
+  registrarCriacao, registrarExclusao, registrarEdicao,
+  registrarEstadoSubtarefa, registrarMovimento
+} from "./auditoria.js";
+import {
   MAX_SUBTAREFAS, ESTADO_INFO, proximoEstado, lerSubtarefas, lerPadroes,
   gerarIdSubtarefa, subtarefasIniciais, progresso
 } from "./subtarefas.js";
@@ -72,6 +76,17 @@ let editando = { colunaId: null, cardId: null }; // alvo do modal
 let arrastando = null;                           // id do card em drag
 let filtroDepartamento = "";   // departamento de trabalho (sempre um)
 let usuario = null;   // { user, email, permissao } - preenchido no boot
+
+// Identificacao usada nos registros de auditoria.
+function quemSouEu() {
+  return usuario ? { email: usuario.email, nome: nomeDoEmail(usuario.email) } : null;
+}
+
+// Traduz o id de uma lista para o nome que aparece na tela.
+function nomeDaLista(colunaId) {
+  const col = COLUNAS.find((c) => c.id === colunaId);
+  return col ? col.nome : colunaId;
+}
 let PESSOAS = [];     // nomes sugeridos no campo "Responsavel"
 
 const cardsRef = collection(db, COLECAO_CARDS);
@@ -133,14 +148,26 @@ function temDonoReal(card) {
   return !!card && typeof card.criadoPor === "string" && card.criadoPor.includes("@");
 }
 
-// Quem pode excluir: o dono da tarefa, um administrador (pode tudo), ou
-// qualquer pessoa quando a tarefa nao tem dono registrado - senao as antigas
-// ficariam impossiveis de limpar.
+// Quem pode alterar e excluir uma tarefa:
+//   . o dono (quem criou)
+//   . o responsavel (quem executa)
+//   . qualquer administrador
+//   . qualquer pessoa, quando a tarefa nao tem dono registrado - senao as
+//     criadas antes do login ficariam impossiveis de limpar
 function podeExcluir(card) {
   if (!card || !usuario) return false;
   if (usuario.permissao.admin) return true;
   if (!temDonoReal(card)) return true;
-  return card.criadoPor === usuario.email;
+  if (card.criadoPor === usuario.email) return true;
+  return ehOResponsavel(card);
+}
+
+// O responsavel e guardado pelo NOME, nao pelo e-mail. A comparacao usa o nome
+// derivado do e-mail de quem esta logado - o mesmo que o modal preenche.
+function ehOResponsavel(card) {
+  const resp = (card.responsavel || "").trim().toLowerCase();
+  if (!resp || !usuario) return false;
+  return resp === nomeDoEmail(usuario.email).toLowerCase();
 }
 
 function cardPorId(id) {
@@ -638,15 +665,20 @@ async function avancarSubtarefa(cardId, subId) {
   const card = cardPorId(cardId);
   if (!card) return;
 
+  const anterior = (card.subtarefas || []).find((s) => s.id === subId);
+  if (!anterior) return;
+
   const novas = (card.subtarefas || []).map((s) =>
     s.id === subId ? { ...s, estado: proximoEstado(s.estado) } : s
   );
+  const depois = novas.find((s) => s.id === subId);
 
   try {
     await updateDoc(doc(db, COLECAO_CARDS, cardId), {
       subtarefas: novas,
       atualizadoEm: serverTimestamp()
     });
+    registrarEstadoSubtarefa(card, anterior, anterior.estado, depois.estado, quemSouEu());
   } catch (e) {
     console.error("[kanban] falha ao atualizar subtarefa:", e);
     setStatus("Nao foi possivel atualizar a etapa.", true);
@@ -767,6 +799,7 @@ async function soltarCard(cardId, colunaDestino) {
       atualizadoEm: serverTimestamp(),
       ...carimboFinalizacao(card.coluna, colunaDestino)
     });
+    registrarMovimento(card, nomeDaLista(card.coluna), nomeDaLista(colunaDestino), quemSouEu());
   } catch (e) {
     console.error("[kanban] falha ao mover card:", e);
     setStatus("Não foi possível mover a tarefa. Tente de novo.", true);
@@ -787,6 +820,7 @@ async function moverColunaVizinha(cardId, direcao) {
       atualizadoEm: serverTimestamp(),
       ...carimboFinalizacao(card.coluna, destino.id)
     });
+    registrarMovimento(card, nomeDaLista(card.coluna), nomeDaLista(destino.id), quemSouEu());
   } catch (e) {
     console.error("[kanban] falha ao mover card:", e);
     setStatus("Não foi possível mover a tarefa. Tente de novo.", true);
@@ -857,10 +891,12 @@ function abrirModal(colunaId, cardId) {
     const dono = podeExcluir(card);
     $("deleteBtn").style.display = dono ? "inline" : "none";
     $("hintDono").textContent = !dono
-      ? "Só quem criou a tarefa — ou um administrador — pode excluí-la."
-      : usuario.permissao.admin && temDonoReal(card) && card.criadoPor !== usuario.email
-        ? "Você é administrador, então pode excluir esta tarefa."
-        : "Você pode excluir esta tarefa.";
+      ? "Só o dono, o responsável ou um administrador pode excluir esta tarefa."
+      : card.criadoPor === usuario.email
+        ? "Você criou esta tarefa, então pode excluí-la."
+        : ehOResponsavel(card)
+          ? "Você é o responsável, então pode excluir esta tarefa."
+          : "Você é administrador, então pode excluir esta tarefa.";
   } else {
     $("fTitle").value = "";
     $("fDesc").value = "";
@@ -1014,14 +1050,24 @@ async function salvarTarefa() {
 
   try {
     if (editando.cardId) {
+      // Fotografia de antes, para a auditoria comparar campo a campo.
+      const antes = { ...cardPorId(editando.cardId) };
       await updateDoc(doc(db, COLECAO_CARDS, editando.cardId), dados);
+      registrarEdicao(
+        antes,
+        { ...antes, ...dados, subtarefas },
+        quemSouEu(),
+        nomeDaLista
+      );
     } else {
-      await addDoc(cardsRef, {
+      const novo = {
         ...dados,
         coluna: editando.colunaId,
         criadoEm: serverTimestamp(),
         criadoPor: usuario ? usuario.email : ""
-      });
+      };
+      const ref = await addDoc(cardsRef, novo);
+      registrarCriacao({ ...novo, id: ref.id }, quemSouEu());
     }
     fecharModal();
   } catch (e) {
@@ -1038,7 +1084,7 @@ async function excluirTarefa() {
 
   if (!podeExcluir(card)) {
     erroModal.textContent =
-      `Só ${nomeDoEmail(card.criadoPor)} (dono) ou um administrador pode excluir esta tarefa.`;
+      "Só o dono, o responsável ou um administrador pode excluir esta tarefa.";
     return;
   }
 
@@ -1046,6 +1092,7 @@ async function excluirTarefa() {
 
   try {
     await deleteDoc(doc(db, COLECAO_CARDS, editando.cardId));
+    registrarExclusao(card, quemSouEu());
     fecharModal();
   } catch (e) {
     console.error("[kanban] falha ao excluir:", e);

@@ -307,3 +307,29 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
   align-items:center;
   justify-content:center;
 }
+
+/* ---------- Reordenar arrastando ---------- */
+.listas-colunas .item,
+.listas-subs .item{
+  cursor:grab;
+  transition:opacity .12s, box-shadow .12s;
+}
+.listas-colunas .item:active,
+.listas-subs .item:active{cursor:grabbing;}
+
+/* o item que esta sendo arrastado */
+.item.arrastando{
+  opacity:0.45;
+  box-shadow:0 4px 12px rgba(0,0,0,0.12);
+}
+
+/* linha laranja indicando onde o item vai cair */
+.item.solta-acima{box-shadow:inset 0 3px 0 0 var(--vr-orange);}
+.item.solta-abaixo{box-shadow:inset 0 -3px 0 0 var(--vr-orange);}
+
+/* o circulo da ordem funciona como punho visual */
+.listas-colunas .ordem,
+.listas-subs .ordem{cursor:grab;}
+
+/* os botoes de acao nao arrastam */
+.item-acoes{cursor:default;}

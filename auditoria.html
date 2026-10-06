@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auditoria — Quadro de Fluxo</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/kanban.css">
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="css/auth.css">
+<link rel="stylesheet" href="css/relatorio.css">
+</head>
+<body>
+
+<div class="board-shell">
+
+  <div class="topbar">
+    <div>
+      <h1>Trilha de <span>Auditoria</span></h1>
+      <p>VR Software — Unidade Minas Gerais · quem alterou o quê, e quando</p>
+    </div>
+    <div class="actions-row">
+      <a class="btn-ghost" href="index.html">← Voltar ao quadro</a>
+      <div id="barraUsuario"></div>
+      <div class="live-badge" id="liveBadge">
+        <span class="live-dot"></span>
+        <span id="liveText">conectando…</span>
+      </div>
+    </div>
+  </div>
+
+  <nav class="submenu">
+    <a href="admin.html">Configuração</a>
+    <a href="relatorio.html">Relatório</a>
+    <a href="auditoria.html" class="ativo" aria-current="page">Auditoria</a>
+  </nav>
+
+  <div class="filtros">
+    <div class="who">
+      <label for="filtroDep">Departamento:</label>
+      <select id="filtroDep"><option value="">Todos</option></select>
+    </div>
+    <div class="who">
+      <label for="filtroQuem">Quem alterou:</label>
+      <select id="filtroQuem"><option value="">Todos</option></select>
+    </div>
+    <div class="who">
+      <label for="filtroAcao">Tipo:</label>
+      <select id="filtroAcao">
+        <option value="">Tudo</option>
+        <option value="tarefa">Só tarefas</option>
+        <option value="subtarefa">Só etapas</option>
+      </select>
+    </div>
+    <div class="who">
+      <label for="filtroBusca">Tarefa:</label>
+      <input id="filtroBusca" type="search" placeholder="buscar pelo título" autocomplete="off">
+    </div>
+    <div class="who">
+      <label for="filtroDe">De:</label>
+      <input id="filtroDe" type="date">
+    </div>
+    <div class="who">
+      <label for="filtroAte">até:</label>
+      <input id="filtroAte" type="date">
+    </div>
+    <button class="btn-ghost" type="button" id="limpar">Limpar filtros</button>
+    <button class="btn-ghost" type="button" id="exportarCsv">Exportar CSV</button>
+  </div>
+
+  <div class="status-line" id="statusLine">Carregando registros…</div>
+
+  <div class="tabela-wrap">
+    <table class="tabela-rel" id="tabela">
+      <thead>
+        <tr>
+          <th class="col-quando">Quando</th>
+          <th class="col-quem">Quem</th>
+          <th class="col-titulo">Tarefa</th>
+          <th>O que mudou</th>
+        </tr>
+      </thead>
+      <tbody id="corpo"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script type="module" src="js/auditoria-tela.js"></script>
+</body>
+</html>
