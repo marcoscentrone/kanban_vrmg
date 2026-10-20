@@ -261,24 +261,36 @@ export function protegerPagina({ exigirAdmin = false } = {}) {
 /* Barra do usuario logado (canto superior)                                   */
 /* -------------------------------------------------------------------------- */
 
+// Escapa < > & " ' para uso seguro em texto E em atributos. Mesma funcao das
+// outras telas; auth.js nao tinha uma porque so inseria dado "confiavel" - mas
+// email e photoURL vem de fora (token/Google) e nao devem ir crus para o HTML.
+function escapeHtml(str) {
+  return String(str == null ? "" : str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function montarBarraUsuario(container, { user, email, permissao }) {
   const box = document.createElement("div");
   box.className = "user-box";
 
   const foto = user.photoURL
-    ? `<img class="user-foto" src="${user.photoURL}" alt="" referrerpolicy="no-referrer">`
-    : `<span class="user-foto vazia">${(email[0] || "?").toUpperCase()}</span>`;
+    ? `<img class="user-foto" src="${escapeHtml(user.photoURL)}" alt="" referrerpolicy="no-referrer">`
+    : `<span class="user-foto vazia">${escapeHtml((email[0] || "?").toUpperCase())}</span>`;
 
   const alcance = permissao.admin
     ? "administrador — acesso total"
     : permissao.veTudo
       ? "vê todos os departamentos"
-      : `vê: ${permissao.departamentos.join(", ")}`;
+      : `vê: ${escapeHtml(permissao.departamentos.join(", "))}`;
 
   box.innerHTML = `
     ${foto}
     <div class="user-info">
-      <span class="user-email" title="${email}">${email}</span>
+      <span class="user-email" title="${escapeHtml(email)}">${escapeHtml(email)}</span>
       <span class="user-alcance">${alcance}</span>
     </div>
     <button class="user-sair" title="Sair">Sair</button>

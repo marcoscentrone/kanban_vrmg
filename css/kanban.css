@@ -679,3 +679,7 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
 }
 #addSubBox input:focus{outline:none; border-color:var(--vr-orange);}
 #addSubBox .btn-ghost{padding:7px 12px; font-size:12px;}
+
+/* Tarefa que o usuario so pode ver (nao e dono/responsavel/admin) */
+.task-card.so-leitura{cursor:default;}
+.task-card.so-leitura .sub{cursor:default;}

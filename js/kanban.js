@@ -122,9 +122,17 @@ function setLive(ligado, texto) {
 }
 
 function escapeHtml(str) {
-  const d = document.createElement("div");
-  d.textContent = str == null ? "" : String(str);
-  return d.innerHTML;
+  // Escapa tambem " e ' de proposito. O truque textContent->innerHTML escapa
+  // so < > & - o suficiente para TEXTO, mas NAO para dentro de um atributo
+  // (title="...", value="...", data-x="..."). Como varios desses atributos
+  // recebem dado do usuario, uma aspa nao escapada quebra o atributo e injeta
+  // um manipulador de evento (XSS armazenado). Escapar as aspas fecha isso.
+  return String(str == null ? "" : str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function iniciais(nome) {
@@ -148,13 +156,14 @@ function temDonoReal(card) {
   return !!card && typeof card.criadoPor === "string" && card.criadoPor.includes("@");
 }
 
-// Quem pode alterar e excluir uma tarefa:
+// Quem pode ALTERAR uma tarefa (editar campos, mover de lista, mudar o estado
+// de uma etapa e excluir). Mesma regra para todas essas acoes:
 //   . o dono (quem criou)
 //   . o responsavel (quem executa)
 //   . qualquer administrador
 //   . qualquer pessoa, quando a tarefa nao tem dono registrado - senao as
-//     criadas antes do login ficariam impossiveis de limpar
-function podeExcluir(card) {
+//     criadas antes do login ficariam impossiveis de mexer
+function podeAlterar(card) {
   if (!card || !usuario) return false;
   if (usuario.permissao.admin) return true;
   if (!temDonoReal(card)) return true;
@@ -162,12 +171,23 @@ function podeExcluir(card) {
   return ehOResponsavel(card);
 }
 
-// O responsavel e guardado pelo NOME, nao pelo e-mail. A comparacao usa o nome
-// derivado do e-mail de quem esta logado - o mesmo que o modal preenche.
+// E-mail do responsavel, a partir do nome escolhido (so cadastrados tem e-mail).
+// Gravado no card alem do nome, para o Firestore conseguir checar permissao -
+// no servidor so existe o e-mail do token, nunca o "nome".
+function emailDoResponsavel(nome) {
+  const n = (nome || "").trim().toLowerCase();
+  if (!n) return "";
+  const pessoa = PESSOAS.find((x) => x.nome.toLowerCase() === n && x.email.includes("@"));
+  return pessoa ? pessoa.email.toLowerCase() : "";
+}
+
+// Comparacao por e-mail quando o card tem responsavelEmail (exato); cai para o
+// nome so em cards antigos, criados antes deste campo existir.
 function ehOResponsavel(card) {
+  if (!usuario) return false;
+  if (card.responsavelEmail) return card.responsavelEmail === usuario.email;
   const resp = (card.responsavel || "").trim().toLowerCase();
-  if (!resp || !usuario) return false;
-  return resp === nomeDoEmail(usuario.email).toLowerCase();
+  return !!resp && resp === nomeDoEmail(usuario.email).toLowerCase();
 }
 
 function cardPorId(id) {
@@ -205,10 +225,22 @@ function cardsExpirados() {
 // os folgados abaixo, e os SEM data de termino sempre por ultimo. Nao existe
 // ordem manual - a posicao e consequencia do prazo, e se reorganiza sozinha
 // quando alguem edita uma data ou o dia vira.
+// A coluna (id) existe no fluxo do departamento atual?
+function colunaConhecida(id) {
+  return COLUNAS.some((c) => c.id === id);
+}
+
 function cardsDaColuna(colunaId) {
   const col = { id: colunaId };
+  // A primeira coluna tambem recolhe os orfaos: cards cuja coluna salva nao
+  // existe mais neste fluxo (ex.: a lista foi apagada ou o departamento trocou
+  // de fluxo). Assim nenhum card some do quadro, e o dado no servidor fica
+  // intacto - e so posicionamento visual ate alguem mover o card.
+  const ehPrimeira = COLUNAS.length > 0 && COLUNAS[0].id === colunaId;
   return cards
-    .filter((c) => c.coluna === colunaId)
+    .filter((c) =>
+      c.coluna === colunaId || (ehPrimeira && !colunaConhecida(c.coluna))
+    )
     .sort((a, b) => {
       const pa = progressoPrazo(a, col);
       const pb = progressoPrazo(b, col);
@@ -295,9 +327,10 @@ function escutarQuadro() {
           id: d.id,
           titulo: dados.titulo || "",
           descricao: dados.descricao || "",
-          coluna: COLUNAS.some((c) => c.id === dados.coluna) ? dados.coluna : COLUNAS[0].id,
+          coluna: dados.coluna || "",   // preserva o valor do servidor; orfaos sao tratados so na exibicao
           departamento: dados.departamento || "",
           responsavel: dados.responsavel || "",
+          responsavelEmail: (dados.responsavelEmail || "").toLowerCase(),
           prioridade: PRIORIDADES.includes(dados.prioridade) ? dados.prioridade : "media",
           inicioPrevisto: typeof dados.inicioPrevisto === "string" ? dados.inicioPrevisto : "",
           fimPrevisto: typeof dados.fimPrevisto === "string" ? dados.fimPrevisto : "",
@@ -539,9 +572,11 @@ function renderColuna(col) {
 }
 
 function renderCard(col, card) {
+  const alteravel = podeAlterar(card);
+
   const div = document.createElement("div");
-  div.className = "task-card p-" + card.prioridade;
-  div.draggable = true;
+  div.className = "task-card p-" + card.prioridade + (alteravel ? "" : " so-leitura");
+  div.draggable = alteravel;              // so arrasta quem pode alterar
   div.dataset.id = card.id;
 
   const indiceCol = COLUNAS.findIndex((c) => c.id === col.id);
@@ -562,19 +597,21 @@ function renderCard(col, card) {
         <span class="meta-date">${escapeHtml(formatarData(card.criadoEm))}</span>
       </div>
       <div class="task-buttons">
-        <button class="icon-btn" data-action="left" title="Mover para trás" ${indiceCol === 0 ? "disabled" : ""}>←</button>
-        <button class="icon-btn" data-action="edit" title="Editar">✎</button>
-        <button class="icon-btn" data-action="right" title="Mover para frente" ${indiceCol === COLUNAS.length - 1 ? "disabled" : ""}>→</button>
+        <button class="icon-btn" data-action="left" title="Mover para trás" ${(!alteravel || indiceCol === 0) ? "disabled" : ""}>←</button>
+        <button class="icon-btn" data-action="edit" title="${alteravel ? "Editar" : "Ver"}">${alteravel ? "✎" : "🔍"}</button>
+        <button class="icon-btn" data-action="right" title="Mover para frente" ${(!alteravel || indiceCol === COLUNAS.length - 1) ? "disabled" : ""}>→</button>
       </div>
     </div>
   `;
 
-  div.querySelectorAll(".sub").forEach((li) => {
-    li.addEventListener("click", (e) => {
-      e.stopPropagation();
-      avancarSubtarefa(card.id, li.dataset.sub);
+  if (alteravel) {
+    div.querySelectorAll(".sub").forEach((li) => {
+      li.addEventListener("click", (e) => {
+        e.stopPropagation();
+        avancarSubtarefa(card.id, li.dataset.sub);
+      });
     });
-  });
+  }
 
   div.addEventListener("dragstart", (e) => {
     arrastando = card.id;
@@ -663,7 +700,7 @@ function renderSubtarefas(card, col) {
 // Avanca o estado de uma etapa direto no card, sem abrir o modal.
 async function avancarSubtarefa(cardId, subId) {
   const card = cardPorId(cardId);
-  if (!card) return;
+  if (!card || !podeAlterar(card)) return;
 
   const anterior = (card.subtarefas || []).find((s) => s.id === subId);
   if (!anterior) return;
@@ -792,6 +829,10 @@ function carimboFinalizacao(colunaAntes, colunaDepois) {
 async function soltarCard(cardId, colunaDestino) {
   const card = cardPorId(cardId);
   if (!card || card.coluna === colunaDestino) return;
+  if (!podeAlterar(card)) {
+    setStatus("Só o dono, o responsável ou um administrador pode mover esta tarefa.", true);
+    return;
+  }
 
   try {
     await updateDoc(doc(db, COLECAO_CARDS, cardId), {
@@ -808,7 +849,7 @@ async function soltarCard(cardId, colunaDestino) {
 
 async function moverColunaVizinha(cardId, direcao) {
   const card = cardPorId(cardId);
-  if (!card) return;
+  if (!card || !podeAlterar(card)) return;
 
   const idx = COLUNAS.findIndex((c) => c.id === card.coluna);
   const destino = COLUNAS[idx + direcao];
@@ -865,6 +906,18 @@ function aplicarFluxoDoDepartamento() {
   COLUNAS = colunasDe(dep).map((c) => ({ ...c, titulo: c.nome }));
 }
 
+// Deixa o modal em modo leitura (true) ou edicao (false): desabilita todos os
+// campos e esconde Salvar + a caixa de adicionar etapa. O Cancelar fica ativo.
+// Chamar DEPOIS de renderSubsModal(), para pegar tambem os campos das etapas.
+function setModalSomenteLeitura(ro) {
+  const modal = overlay.querySelector(".modal");
+  modal.querySelectorAll("input, textarea, select").forEach((el) => { el.disabled = ro; });
+  modal.querySelectorAll(".sub-estado, .sub-remover").forEach((b) => { b.disabled = ro; });
+  $("saveBtn").style.display = ro ? "none" : "";
+  const addBox = $("addSubBox");
+  if (addBox) addBox.style.display = ro ? "none" : "";
+}
+
 function abrirModal(colunaId, cardId) {
   editando = { colunaId, cardId };
   const ehEdicao = !!cardId;
@@ -887,16 +940,18 @@ function abrirModal(colunaId, cardId) {
     renderSubsModal();
     mostrarDono(card.criadoPor);
 
-    // So o dono da tarefa pode excluir.
-    const dono = podeExcluir(card);
-    $("deleteBtn").style.display = dono ? "inline" : "none";
-    $("hintDono").textContent = !dono
-      ? "Só o dono, o responsável ou um administrador pode excluir esta tarefa."
+    // Dono, responsavel ou admin alteram tudo; os demais so visualizam.
+    const alteravel = podeAlterar(card);
+    setModalSomenteLeitura(!alteravel);
+    $("modalTitle").textContent = alteravel ? "Editar tarefa" : "Ver tarefa (somente leitura)";
+    $("deleteBtn").style.display = alteravel ? "inline" : "none";
+    $("hintDono").textContent = !alteravel
+      ? "Você não pode alterar esta tarefa — só o dono, o responsável ou um administrador."
       : card.criadoPor === usuario.email
-        ? "Você criou esta tarefa, então pode excluí-la."
+        ? "Você criou esta tarefa, então pode alterá-la e excluí-la."
         : ehOResponsavel(card)
-          ? "Você é o responsável, então pode excluir esta tarefa."
-          : "Você é administrador, então pode excluir esta tarefa.";
+          ? "Você é o responsável, então pode alterá-la e excluí-la."
+          : "Você é administrador, então pode alterá-la e excluí-la.";
   } else {
     $("fTitle").value = "";
     $("fDesc").value = "";
@@ -911,8 +966,9 @@ function abrirModal(colunaId, cardId) {
     subsRascunho = subtarefasIniciais(dep ? dep.subtarefasPadrao : []);
     renderSubsModal();
     mostrarDono(usuario ? usuario.email : "");
+    setModalSomenteLeitura(false);
     $("deleteBtn").style.display = "none";
-    $("hintDono").textContent = "Quem cria a tarefa é o dono e pode excluí-la depois.";
+    $("hintDono").textContent = "Quem cria a tarefa é o dono e pode alterá-la e excluí-la depois.";
   }
 
   overlay.classList.add("show");
@@ -1003,6 +1059,17 @@ function fecharModal() {
 }
 
 async function salvarTarefa() {
+  // Blindagem: editar uma tarefa existente exige permissao. O modal ja entra
+  // em modo leitura para quem nao pode, mas o atalho Ctrl+Enter chamaria esta
+  // funcao mesmo assim - entao barramos aqui tambem.
+  if (editando.cardId) {
+    const atual = cardPorId(editando.cardId);
+    if (atual && !podeAlterar(atual)) {
+      erroModal.textContent = "Você não pode alterar esta tarefa.";
+      return;
+    }
+  }
+
   const titulo = $("fTitle").value.trim();
   if (!titulo) {
     erroModal.textContent = "Informe um título para a tarefa.";
@@ -1038,6 +1105,7 @@ async function salvarTarefa() {
     descricao: $("fDesc").value.trim(),
     departamento: $("fDepartamento").value,
     responsavel,
+    responsavelEmail: emailDoResponsavel(responsavel),
     prioridade: $("fPriority").value,
     subtarefas,
     inicioPrevisto,
@@ -1082,7 +1150,7 @@ async function excluirTarefa() {
   const card = cardPorId(editando.cardId);
   if (!card) { fecharModal(); return; }
 
-  if (!podeExcluir(card)) {
+  if (!podeAlterar(card)) {
     erroModal.textContent =
       "Só o dono, o responsável ou um administrador pode excluir esta tarefa.";
     return;

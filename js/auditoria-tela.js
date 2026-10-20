@@ -26,9 +26,17 @@ let conectado = false;
 const $ = (id) => document.getElementById(id);
 
 function escapeHtml(str) {
-  const d = document.createElement("div");
-  d.textContent = str == null ? "" : String(str);
-  return d.innerHTML;
+  // Escapa tambem " e ' de proposito. O truque textContent->innerHTML escapa
+  // so < > & - o suficiente para TEXTO, mas NAO para dentro de um atributo
+  // (title="...", value="...", data-x="..."). Como varios desses atributos
+  // recebem dado do usuario, uma aspa nao escapada quebra o atributo e injeta
+  // um manipulador de evento (XSS armazenado). Escapar as aspas fecha isso.
+  return String(str == null ? "" : str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function setStatus(msg, isErro = false) {

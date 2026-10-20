@@ -25,7 +25,7 @@ service cloud.firestore {
     // true  = libera tudo (configuracao inicial)
     // false = valem as regras reais definidas abaixo
     function modoAberto() {
-      return true;          // <<<<<< TROQUE PARA false QUANDO TERMINAR
+      return false;          // <<<<<< TROQUE PARA false QUANDO TERMINAR
     }
 
     // ---------------- Auxiliares ----------------
@@ -41,6 +41,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // So e-mails @vrbelohorizonte.com.br (verificados) contam como "da empresa".
+    // E a mesma trava 1 do portal, agora no SERVIDOR. Antes vivia so no cliente
+    // (DOMINIOS_PERMITIDOS, em firebase-config.js), entao qualquer conta Google
+    // passava se chamasse a API direto. Aqui nao passa mais.
+    function doDominio() {
+      return logado()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower().matches('.*@vrbelohorizonte[.]com[.]br');
+    }
+
     function meuEmail() {
       return request.auth.token.email.lower();
     }
@@ -54,22 +64,55 @@ service cloud.firestore {
 
     // ---------------- Tarefas ----------------
     match /kanban_cards/{cardId} {
-      allow read, write: if modoAberto() || souDono() || logado();
+
+      // Dono da tarefa: o e-mail que criou (criadoPor).
+      function donoDaTarefa() {
+        return resource.data.criadoPor == meuEmail();
+      }
+
+      // Responsavel: gravado por e-mail (responsavelEmail) alem do nome, justo
+      // para o servidor conseguir comparar - aqui so existe o e-mail do token.
+      function responsavelDaTarefa() {
+        return 'responsavelEmail' in resource.data
+          && resource.data.responsavelEmail == meuEmail();
+      }
+
+      // Sem dono real: criadoPor ausente ou que nao e um e-mail (cards antigos,
+      // criados antes do login). Esses qualquer um do dominio pode mexer.
+      function semDonoReal() {
+        return !('criadoPor' in resource.data)
+          || !(resource.data.criadoPor is string)
+          || !resource.data.criadoPor.matches('.*@.*');
+      }
+
+      // A MESMA regra do podeAlterar() da interface, agora no servidor.
+      function podeMexer() {
+        return souAdmin() || donoDaTarefa() || responsavelDaTarefa() || semDonoReal();
+      }
+
+      // Ler e criar: qualquer pessoa do dominio.
+      allow read:   if modoAberto() || souDono() || doDominio();
+      allow create: if modoAberto() || souDono() || doDominio();
+
+      // Alterar e excluir: so dono, responsavel, admin - ou tarefa sem dono.
+      allow update, delete: if modoAberto() || souDono() || (doDominio() && podeMexer());
     }
 
     // ---------------- Departamentos ----------------
     // Todos os logados leem (o quadro precisa da lista); so admin altera.
     match /kanban_departamentos/{departamentoId} {
-      allow read:  if modoAberto() || souDono() || logado();
+      allow read:  if modoAberto() || souDono() || doDominio();
       allow write: if modoAberto() || souAdmin();
     }
 
     // ---------------- Acessos (e-mail -> departamentos) ----------------
-    // Leitura liberada a quem esta logado: auth.js precisa ler o proprio
-    // documento e a tela administrativa precisa saber se ja existe um admin.
+    // Leitura liberada a quem e do dominio da empresa: auth.js precisa ler o
+    // proprio documento e a tela administrativa precisa saber se ja existe um
+    // admin. (Ainda expoe a tabela inteira a qualquer funcionario - apertar
+    // para "so o proprio doc + admin" e um proximo passo.)
     // Escrita so para administradores.
     match /kanban_acessos/{email} {
-      allow read:  if modoAberto() || souDono() || logado();
+      allow read:  if modoAberto() || souDono() || doDominio();
       allow write: if modoAberto() || souAdmin();
     }
 
@@ -84,7 +127,15 @@ service cloud.firestore {
     // todos os departamentos.
     match /kanban_auditoria/{registroId} {
       allow read:   if modoAberto() || souAdmin();
-      allow create: if modoAberto() || logado();
+
+      // create exige que o campo porEmail seja o PROPRIO e-mail de quem grava.
+      // Sem isso, qualquer logado forjava registros em nome de outra pessoa -
+      // uma trilha com autoria falsificavel nao serve como trilha.
+      allow create: if modoAberto() || (
+        doDominio()
+        && request.resource.data.porEmail == request.auth.token.email.lower()
+      );
+
       allow update, delete: if false;
     }
 
