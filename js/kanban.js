@@ -1272,7 +1272,16 @@ async function mostrarAtalhoAdmin(logado) {
     link.style.display = "inline-flex";
     link.classList.add("primeiro-acesso");
     link.title = "Nenhum administrador cadastrado — clique para configurar";
+    return;
   }
+
+  // Ja existe administrador e este usuario nao e um: ele ainda pode ver Relatorio
+  // e Auditoria. O atalho passa a levar ao Relatorio (a aba Configuracao fica
+  // oculta la dentro para quem nao e admin).
+  link.href = "relatorio.html";
+  link.title = "Relatórios e auditoria";
+  link.setAttribute("aria-label", "Relatórios e auditoria");
+  link.style.display = "inline-flex";
 }
 
 // Nada roda antes do login: protegerPagina() so resolve com alguem autenticado.

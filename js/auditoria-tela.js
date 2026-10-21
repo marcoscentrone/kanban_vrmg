@@ -9,11 +9,11 @@
    ========================================================================== */
 
 import { db, COLECAO_AUDITORIA, COLECAO_DEPARTAMENTOS } from "./firebase-config.js";
-import { protegerPagina, montarBarraUsuario } from "./auth.js";
+import { protegerPagina, montarBarraUsuario, ajustarSubmenu } from "./auth.js";
 import { descrever } from "./auditoria.js";
 import { formatarDataISO } from "./cronograma.js";
 import {
-  collection, onSnapshot, query, orderBy, limit
+  collection, onSnapshot, query, orderBy, limit, where
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const LIMITE = 500;
@@ -65,11 +65,16 @@ function escutar() {
   }, (e) => console.warn("[auditoria] departamentos:", e.code || e));
 
   // orderBy + limit no servidor: so os registros mais recentes trafegam.
-  const consulta = query(
-    collection(db, COLECAO_AUDITORIA),
-    orderBy("em", "desc"),
-    limit(LIMITE)
-  );
+  // Quem nao ve tudo le apenas a trilha dos departamentos que acompanha
+  // (where departamento in ...), espelhando a regra do Firestore; admin e quem
+  // ve tudo leem a colecao inteira. O 'in' aceita ate 30 valores.
+  const ref = collection(db, COLECAO_AUDITORIA);
+  const meusDeps = usuario && !usuario.permissao.veTudo
+    ? (usuario.permissao.departamentos || []).slice(0, 30)
+    : null;
+  const consulta = (meusDeps && meusDeps.length)
+    ? query(ref, where("departamento", "in", meusDeps), orderBy("em", "desc"), limit(LIMITE))
+    : query(ref, orderBy("em", "desc"), limit(LIMITE));
 
   onSnapshot(consulta, opcoes, (snap) => {
     registros = snap.docs.map((d) => {
@@ -293,6 +298,7 @@ $("exportarCsv").addEventListener("click", exportarCsv);
 protegerPagina().then((logado) => {
   usuario = logado;
   montarBarraUsuario($("barraUsuario"), logado);
+  ajustarSubmenu(logado.permissao);
   montarFiltroDepartamento();
   escutar();
 });

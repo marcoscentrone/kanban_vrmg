@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "kanban_auditoria",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departamento", "order": "ASCENDING" },
+        { "fieldPath": "em", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

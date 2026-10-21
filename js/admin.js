@@ -19,7 +19,7 @@
 import {
   db, COLECAO_CARDS, COLECAO_DEPARTAMENTOS, COLECAO_ACESSOS, ADMIN_ABERTO
 } from "./firebase-config.js";
-import { protegerPagina, montarBarraUsuario, existeAlgumAdmin } from "./auth.js";
+import { protegerPagina, montarBarraUsuario, existeAlgumAdmin, ajustarSubmenu } from "./auth.js";
 import {
   MAX_COLUNAS, COLUNAS_PADRAO, lerColunas, colunasDe, gerarIdColuna
 } from "./colunas.js";
@@ -925,14 +925,17 @@ protegerPagina({ exigirAdmin: false }).then(async (logado) => {
     document.body.innerHTML =
       '<div class="sem-permissao">' +
       '<h1>Acesso restrito</h1>' +
-      `<p><strong>${logado.email}</strong> não tem permissão de administrador.</p>` +
-      '<p>Peça a quem administra o quadro para marcar seu e-mail como administrador.</p>' +
+      `<p><strong>${escapeHtml(logado.email)}</strong> não tem permissão de administrador.</p>` +
+      '<p>A configuração é só para administradores. Você ainda pode acompanhar ' +
+      'o <a href="relatorio.html">Relatório</a> e a <a href="auditoria.html">Auditoria</a> ' +
+      'dos seus departamentos.</p>' +
       '<p><a class="btn-ghost" href="index.html">← Voltar ao quadro</a></p>' +
       "</div>";
     return;
   }
 
   montarBarraUsuario($("barraUsuario"), logado);
+  ajustarSubmenu(logado.permissao);
   renderCheckboxes();
   renderColunas();
   renderSubs();

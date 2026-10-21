@@ -1,6 +1,7 @@
 {
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "hosting": {
     "public": ".",
@@ -11,6 +12,7 @@
       "servidor.py",
       "servir.bat",
       "firestore.rules",
+      "firestore.indexes.json",
       "README.md"
     ]
   }

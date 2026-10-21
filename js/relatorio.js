@@ -11,7 +11,7 @@
 import {
   db, COLECAO_CARDS, COLECAO_DEPARTAMENTOS
 } from "./firebase-config.js";
-import { protegerPagina, montarBarraUsuario } from "./auth.js";
+import { protegerPagina, montarBarraUsuario, ajustarSubmenu } from "./auth.js";
 import { colunasDe, lerColunas } from "./colunas.js";
 import { lerSubtarefas, ESTADO_INFO, progresso } from "./subtarefas.js";
 import {
@@ -431,6 +431,7 @@ $("exportarCsv").addEventListener("click", exportarCsv);
 protegerPagina().then((logado) => {
   usuario = logado;
   montarBarraUsuario($("barraUsuario"), logado);
+  ajustarSubmenu(logado.permissao);
   montarFiltroDepartamento();
   escutar();
 });

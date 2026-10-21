@@ -161,10 +161,13 @@ service cloud.firestore {
     // ao salvar uma tarefa). Mas ninguem edita nem apaga um registro - nem
     // administrador. Uma trilha que pode ser reescrita nao serve como trilha.
     //
-    // Leitura: so administradores. O historico mostra o que foi alterado em
-    // todos os departamentos.
+    // Leitura: administrador (e quem ve tudo) enxerga a trilha inteira; os
+    // demais so os registros dos departamentos que acompanham - a MESMA regra
+    // de isolamento das tarefas. A consulta do cliente precisa filtrar por
+    // departamento (where departamento in ...), senao o Firestore recusa.
     match /kanban_auditoria/{registroId} {
-      allow read:   if modoAberto() || souAdmin();
+      allow read:   if modoAberto() || souDono()
+        || (doDominio() && (veTudoCards() || resource.data.departamento in meusDeps()));
 
       // create exige que o campo porEmail seja o PROPRIO e-mail de quem grava.
       // Sem isso, qualquer logado forjava registros em nome de outra pessoa -

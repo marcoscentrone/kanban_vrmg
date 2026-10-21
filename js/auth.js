@@ -289,6 +289,14 @@ function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
+// A aba "Configuracao" (admin.html) so faz sentido para administrador. Quem nao
+// e admin fica apenas com Relatorio e Auditoria no submenu - some o link dele.
+// Chamar nas paginas que tem o submenu (admin/relatorio/auditoria) apos o login.
+export function ajustarSubmenu(permissao) {
+  const link = document.getElementById("linkConfig");
+  if (link && !(permissao && permissao.admin)) link.style.display = "none";
+}
+
 export function montarBarraUsuario(container, { user, email, permissao }) {
   const box = document.createElement("div");
   box.className = "user-box";
