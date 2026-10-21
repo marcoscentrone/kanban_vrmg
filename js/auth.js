@@ -21,7 +21,7 @@
    ========================================================================== */
 
 import {
-  auth, db, COLECAO_ACESSOS,
+  auth, db, COLECAO_ACESSOS, COLECAO_DEPARTAMENTOS,
   DOMINIOS_PERMITIDOS, EMAILS_LIBERADOS, EXIGIR_CADASTRO, EMAIL_DONO, SIMULAR_USUARIO
 } from "./firebase-config.js";
 import {
@@ -34,6 +34,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  setDoc,
+  serverTimestamp,
   collection,
   query,
   where,
@@ -139,6 +141,93 @@ export function sair() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Primeiro acesso: a pessoa escolhe o departamento dela                      */
+/* -------------------------------------------------------------------------- */
+
+// Le os departamentos cadastrados (nomes), para oferecer na tela de escolha.
+async function lerDepartamentosDisponiveis() {
+  try {
+    const snap = await getDocs(collection(db, COLECAO_DEPARTAMENTOS));
+    return snap.docs
+      .map((d) => (d.data().nome || "").trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  } catch (e) {
+    console.error("[auth] falha ao ler departamentos no primeiro acesso:", e);
+    return [];
+  }
+}
+
+// Mostra a tela de escolha e cria kanban_acessos/{email} com o departamento
+// escolhido - sempre como membro comum (admin:false, supervisor:false).
+// Resolve true se criou o cadastro; false se a pessoa escolheu "Sair".
+async function fluxoPrimeiroAcesso(email) {
+  const deps = await lerDepartamentosDisponiveis();
+
+  return new Promise((resolve) => {
+    const tela = document.createElement("div");
+    tela.className = "login-tela";
+    tela.id = "primeiroAcessoTela";
+
+    const temDeps = deps.length > 0;
+    tela.innerHTML = `
+      <div class="login-caixa">
+        <h1>Bem-vindo ao <span>Quadro</span></h1>
+        <p class="login-sub">${escapeHtml(email)}</p>
+        ${temDeps
+          ? `<p class="login-hint">Escolha o seu departamento para começar. Depois, o administrador ou o supervisor pode ajustar o seu acesso.</p>
+             <select id="depPrimeiroAcesso" class="login-select">
+               <option value="">— selecione o departamento —</option>
+               ${deps.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("")}
+             </select>
+             <button class="login-google" id="btnEntrarDep"><span>Entrar</span></button>`
+          : `<p class="login-hint">Ainda não há departamentos cadastrados. Peça a um administrador para cadastrar os departamentos e entre novamente.</p>`}
+        <p class="login-erro" id="primeiroAcessoErro"></p>
+        <button class="login-sair-link" id="btnSairPrimeiro">Sair</button>
+      </div>
+    `;
+    document.body.appendChild(tela);
+
+    const erro = (msg) => { tela.querySelector("#primeiroAcessoErro").textContent = msg; };
+
+    if (temDeps) {
+      tela.querySelector("#btnEntrarDep").onclick = async () => {
+        const dep = tela.querySelector("#depPrimeiroAcesso").value;
+        if (!dep) { erro("Selecione um departamento."); return; }
+        const btn = tela.querySelector("#btnEntrarDep");
+        btn.disabled = true;
+        erro("");
+        try {
+          await setDoc(doc(db, COLECAO_ACESSOS, email), {
+            email,
+            departamentos: [dep],
+            admin: false,
+            supervisor: false,
+            autocadastro: true,
+            criadoEm: serverTimestamp(),
+            atualizadoEm: serverTimestamp()
+          });
+          tela.remove();
+          resolve(true);
+        } catch (e) {
+          console.error("[auth] falha ao salvar primeiro acesso:", e);
+          btn.disabled = false;
+          erro(e.code === "permission-denied"
+            ? "O servidor recusou o cadastro. Avise o administrador."
+            : "Não foi possível salvar. Tente novamente.");
+        }
+      };
+    }
+
+    tela.querySelector("#btnSairPrimeiro").onclick = async () => {
+      await signOut(auth);
+      tela.remove();
+      resolve(false);
+    };
+  });
+}
+
+/* -------------------------------------------------------------------------- */
 /* Permissoes                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -229,7 +318,17 @@ export function protegerPagina({ exigirAdmin = false } = {}) {
         return;
       }
 
-      const permissao = await carregarPermissao(email);
+      let permissao = await carregarPermissao(email);
+
+      // Primeiro acesso: quem ainda nao tem cadastro (e nao e o dono) escolhe o
+      // departamento. Isso cria o registro em kanban_acessos para o admin ou o
+      // supervisor poderem ajustar depois.
+      if (!permissao.cadastrado && !permissao.dono) {
+        if (tela) { tela.remove(); tela = null; }
+        const criou = await fluxoPrimeiroAcesso(email);
+        if (!criou) return; // escolheu "Sair": o signOut ja reabre o login
+        permissao = await carregarPermissao(email);
+      }
 
       // Trava 2 - cadastro obrigatorio
       if (!(await cadastroObrigatorioOk(permissao))) {

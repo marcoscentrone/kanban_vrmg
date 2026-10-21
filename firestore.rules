@@ -185,8 +185,42 @@ service cloud.firestore {
     // para "so o proprio doc + admin" e um proximo passo.)
     // Escrita so para administradores.
     match /kanban_acessos/{email} {
+
+      // Doc que um SUPERVISOR pode gerenciar: membro comum (nunca admin nem
+      // supervisor) cujos departamentos estao TODOS dentro dos que ele
+      // supervisiona. Assim o supervisor nunca nomeia admin nem mexe em gente
+      // de outro departamento.
+      function docSupervisionavel(d) {
+        return ehSupervisor()
+          && d.admin != true
+          && d.supervisor != true
+          && d.departamentos is list
+          && d.departamentos.size() > 0
+          && meusDeps().hasAll(d.departamentos);
+      }
+
       allow read:  if modoAberto() || souDono() || doDominio();
-      allow write: if modoAberto() || souAdmin();
+
+      // Criar: admin (qualquer); supervisor (dentro do escopo dele); ou a
+      // PROPRIA pessoa no primeiro acesso, escolhendo departamentos - nunca
+      // como admin nem supervisor.
+      allow create: if modoAberto() || souAdmin()
+        || (doDominio() && docSupervisionavel(request.resource.data))
+        || (doDominio() && email == meuEmail()
+            && request.resource.data.admin != true
+            && request.resource.data.supervisor != true
+            && request.resource.data.departamentos is list
+            && request.resource.data.departamentos.size() <= 30);
+
+      // Alterar: admin; ou supervisor quando o doc ANTES e DEPOIS continua no
+      // escopo dele (nao pode promover a admin/supervisor nem jogar para fora).
+      allow update: if modoAberto() || souAdmin()
+        || (doDominio() && docSupervisionavel(resource.data)
+            && docSupervisionavel(request.resource.data));
+
+      // Excluir: admin; ou supervisor para um membro do escopo dele.
+      allow delete: if modoAberto() || souAdmin()
+        || (doDominio() && docSupervisionavel(resource.data));
     }
 
     // ---------------- Auditoria ----------------

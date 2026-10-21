@@ -773,12 +773,14 @@ function renderCheckboxes(marcados = []) {
   const box = $("checkboxesDepartamentos");
   box.innerHTML = "";
 
-  if (!departamentos.length) {
+  // Supervisor so pode vincular pessoas aos departamentos que ele supervisiona.
+  const lista = departamentosVisiveis();
+  if (!lista.length) {
     box.innerHTML = '<span class="vazio">Cadastre um departamento primeiro.</span>';
     return;
   }
 
-  departamentos.forEach((dep) => {
+  lista.forEach((dep) => {
     const label = document.createElement("label");
     label.innerHTML =
       `<input type="checkbox" value="${escapeHtml(dep.nome)}"${marcados.includes(dep.nome) ? " checked" : ""}>` +
@@ -795,15 +797,17 @@ function departamentosMarcados() {
 
 function renderAcessos() {
   const ul = $("listaAcessos");
-  $("contaAcessos").textContent = acessos.length;
+  // Supervisor so enxerga/gerencia os membros comuns dos departamentos dele.
+  const lista = souSupervisorPuro() ? acessos.filter(acessoGerenciavelPorSup) : acessos;
+  $("contaAcessos").textContent = lista.length;
   ul.innerHTML = "";
 
-  if (!acessos.length) {
+  if (!lista.length) {
     ul.innerHTML = '<li class="lista-vazia">Nenhum e-mail cadastrado ainda.</li>';
     return;
   }
 
-  acessos.forEach((ac) => {
+  lista.forEach((ac) => {
     const li = document.createElement("li");
     li.className = "item" + (editandoAcesso === ac.id ? " editando" : "");
 
@@ -830,6 +834,7 @@ function renderAcessos() {
 }
 
 function editarAcesso(ac) {
+  if (souSupervisorPuro() && !acessoGerenciavelPorSup(ac)) return;
   editandoAcesso = ac.id;
   $("novoEmail").value = ac.email;
   $("novoEmail").disabled = true; // o e-mail e a chave do documento
@@ -874,8 +879,16 @@ $("formAcesso").addEventListener("submit", async (e) => {
   }
 
   const marcados = departamentosMarcados();
-  const ehAdmin = $("ehAdmin").checked;
-  const ehSup = $("ehSupervisor").checked;
+  // Um supervisor nunca define papel: todo mundo que ele cadastra e membro comum.
+  const ehAdmin = souSupervisorPuro() ? false : $("ehAdmin").checked;
+  const ehSup = souSupervisorPuro() ? false : $("ehSupervisor").checked;
+
+  // Membro cadastrado por supervisor precisa pertencer a pelo menos um
+  // departamento (dos que ele supervisiona) - nunca "sem restricao".
+  if (souSupervisorPuro() && marcados.length === 0) {
+    $("erroAcesso").textContent = "Selecione pelo menos um departamento para esta pessoa.";
+    return;
+  }
 
   // Supervisor so tem poder dentro dos departamentos marcados - sem nenhum
   // marcado, "supervisor" nao significaria nada.
@@ -935,6 +948,7 @@ function removendoUltimoAdmin(email) {
 }
 
 async function excluirAcesso(ac) {
+  if (souSupervisorPuro() && !acessoGerenciavelPorSup(ac)) return;
   if (ac.admin && removendoUltimoAdmin(ac.id)) {
     $("erroAcesso").textContent =
       "É obrigatório ter pelo menos um administrador. Este é o único — marque outro como administrador antes de remover.";
@@ -998,11 +1012,36 @@ protegerPagina({ exigirAdmin: false }).then(async (logado) => {
 
 // Deixa a tela de configuracao so com o painel de Listas/Subtarefas.
 function aplicarModoSupervisor() {
+  // Supervisor NAO cria/exclui/renomeia departamentos - esconde so esse painel.
+  // O painel de Acessos fica, porem restrito aos departamentos dele.
   const dep = $("painelDepartamentos");
-  const ace = $("painelAcessos");
   if (dep) dep.style.display = "none";
-  if (ace) ace.style.display = "none";
+  restringirAcessosAoSupervisor();
   const sub = document.querySelector(".topbar p");
   if (sub) sub.textContent =
-    "VR Software — Unidade Minas Gerais · listas e subtarefas dos seus departamentos";
+    "VR Software — Unidade Minas Gerais · listas, subtarefas e acessos dos seus departamentos";
+}
+
+// No painel de Acessos, o supervisor so cadastra membros comuns: esconde os
+// checkboxes de papel (admin e supervisor) e ajusta a dica.
+function restringirAcessosAoSupervisor() {
+  const la = $("ehAdmin").closest(".check-admin");
+  const ls = $("ehSupervisor").closest(".check-admin");
+  if (la) la.style.display = "none";
+  if (ls) ls.style.display = "none";
+  const hint = document.querySelector("#painelAcessos .painel-hint");
+  if (hint) hint.textContent =
+    "Você gerencia as pessoas dos seus departamentos. Não é possível definir administradores.";
+}
+
+function souSupervisorPuro() {
+  return !!(permissaoAtual && permissaoAtual.supervisor && !permissaoAtual.admin);
+}
+
+// Acesso que o supervisor pode gerenciar: membro comum (nem admin nem
+// supervisor) cujos departamentos estao TODOS dentro dos que ele supervisiona.
+function acessoGerenciavelPorSup(ac) {
+  if (!ac || ac.admin || ac.supervisor) return false;
+  const meus = (permissaoAtual && permissaoAtual.departamentos) || [];
+  return ac.departamentos.length > 0 && ac.departamentos.every((d) => meus.includes(d));
 }

@@ -69,6 +69,36 @@ body.nao-logado .board-shell{display:none;}
 }
 .login-google:disabled{opacity:0.6; cursor:default;}
 
+/* Tela de primeiro acesso: escolha do departamento */
+.login-select{
+  width:100%;
+  padding:12px 14px;
+  margin-bottom:12px;
+  border:1.5px solid var(--vr-gray);
+  border-radius:7px;
+  background:var(--vr-white);
+  color:var(--vr-black);
+  font-family:'Montserrat',sans-serif;
+  font-size:14px;
+  cursor:pointer;
+}
+.login-select:focus{
+  outline:none;
+  border-color:var(--vr-orange);
+  box-shadow:0 0 0 3px var(--orange-tint);
+}
+.login-sair-link{
+  margin-top:16px;
+  background:none;
+  border:none;
+  color:var(--vr-text);
+  font-family:'Montserrat',sans-serif;
+  font-size:13px;
+  text-decoration:underline;
+  cursor:pointer;
+}
+.login-sair-link:hover{color:var(--vr-orange);}
+
 /* "G" do Google nas cores da marca deles */
 .login-google .g{
   width:22px;
