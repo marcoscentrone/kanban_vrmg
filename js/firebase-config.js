@@ -53,6 +53,13 @@ export const COLECAO_ACESSOS = "kanban_acessos";
 //                              porEmail, porNome, em }
 export const COLECAO_AUDITORIA = "kanban_auditoria";
 
+// Arquivo das tarefas que sairam do quadro mas continuam no relatorio:
+//   cards_finalizados/{id} -> tarefa concluida (botao "Finalizar")
+//   cards_cancelados/{id}  -> tarefa cancelada (antigo "Excluir")
+// Guardam os mesmos campos do card + status, arquivadoEm e arquivadoPor.
+export const COLECAO_FINALIZADOS = "cards_finalizados";
+export const COLECAO_CANCELADOS = "cards_cancelados";
+
 // Ambiente atual - usado so para exibir um aviso discreto na tela.
 // Troque para "producao" quando apontar para o Firebase da empresa.
 export const AMBIENTE = "teste";

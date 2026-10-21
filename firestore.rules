@@ -74,6 +74,30 @@ service cloud.firestore {
       return ehSupervisor() && dep in meusDeps();
     }
 
+    // Quem pode arquivar uma tarefa (finalizar/cancelar), olhando os dados do
+    // doc arquivado. Espelha o podeMexer(): admin, dono, responsavel, supervisor
+    // do departamento, ou tarefa sem dono real.
+    function podeArquivar(d) {
+      return souAdmin()
+        || (d.criadoPor == meuEmail())
+        || ('responsavelEmail' in d && d.responsavelEmail == meuEmail())
+        || supervisionaDepto(d.departamento)
+        || !('criadoPor' in d) || !(d.criadoPor is string) || !d.criadoPor.matches('.*@.*');
+    }
+
+    // Leitura de um arquivo (finalizados/cancelados): mesma visibilidade das
+    // tarefas - admin/ve-tudo tudo, supervisor o departamento dele, usuario
+    // comum so onde ele e o responsavel.
+    function podeLerArquivo() {
+      return souDono() || (doDominio() && (
+        veTudoCards()
+        || supervisionaDepto(resource.data.departamento)
+        || (resource.data.departamento in meusDeps()
+            && 'responsavelEmail' in resource.data
+            && resource.data.responsavelEmail == meuEmail())
+      ));
+    }
+
     // ---------------- Tarefas ----------------
     match /kanban_cards/{cardId} {
 
@@ -306,6 +330,25 @@ service cloud.firestore {
         && auditoriaValida();
 
       allow update, delete: if false;
+    }
+
+    // ---------- Arquivo de tarefas (saem do quadro, ficam no relatorio) --------
+    // cards_finalizados: concluidas (botao "Finalizar").
+    // cards_cancelados : canceladas (antigo "Excluir").
+    // Imutaveis depois de criadas; so admin apaga (limpeza). O create exige que
+    // quem grava pudesse arquivar a tarefa (mesma regra de mexer nela).
+    match /cards_finalizados/{id} {
+      allow read:   if podeLerArquivo();
+      allow create: if doDominio() && podeArquivar(request.resource.data);
+      allow update: if false;
+      allow delete: if souAdmin();
+    }
+
+    match /cards_cancelados/{id} {
+      allow read:   if podeLerArquivo();
+      allow create: if doDominio() && podeArquivar(request.resource.data);
+      allow update: if false;
+      allow delete: if souAdmin();
     }
 
     // Qualquer outra colecao continua bloqueada.

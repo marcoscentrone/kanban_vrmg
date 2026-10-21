@@ -679,6 +679,18 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
 .sub-mover:hover:not(:disabled){border-color:var(--vr-orange); color:var(--vr-orange);}
 .sub-mover:disabled{opacity:0.35; cursor:default;}
 
+/* Botao de saida do modal quando a tarefa esta na ultima coluna: "Finalizar" */
+.link-btn.finalizar{color:var(--live-green); font-weight:600;}
+.campo-finalizado{
+  font-size:12px;
+  font-weight:600;
+  color:var(--vr-text);
+  background:var(--vr-gray-light);
+  border-radius:6px;
+  padding:7px 10px;
+  margin-bottom:8px;
+}
+
 #addSubBox{display:flex; gap:6px;}
 #addSubBox input{
   flex:1 1 auto;

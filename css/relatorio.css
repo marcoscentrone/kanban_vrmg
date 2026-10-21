@@ -150,6 +150,16 @@
   padding:2px 8px;
   border-radius:4px;
 }
+.tag-cancel{
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.4px;
+  color:var(--vr-white);
+  background:var(--danger);
+  padding:2px 8px;
+  border-radius:4px;
+}
 
 .col-prazo.atrasada{color:var(--danger); font-weight:700;}
 

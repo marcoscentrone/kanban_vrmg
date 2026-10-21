@@ -13,13 +13,15 @@
    ========================================================================== */
 
 import {
-  db, COLECAO_CARDS, COLECAO_DEPARTAMENTOS, COLECAO_ACESSOS, AMBIENTE, ADMIN_ABERTO
+  db, COLECAO_CARDS, COLECAO_DEPARTAMENTOS, COLECAO_ACESSOS, AMBIENTE, ADMIN_ABERTO,
+  COLECAO_FINALIZADOS, COLECAO_CANCELADOS
 } from "./firebase-config.js";
 import { protegerPagina, montarBarraUsuario } from "./auth.js";
 import { COLUNAS_PADRAO, lerColunas, colunasDe } from "./colunas.js";
 import {
   registrarCriacao, registrarExclusao, registrarEdicao,
-  registrarEstadoSubtarefa, registrarMovimento
+  registrarEstadoSubtarefa, registrarMovimento,
+  registrarFinalizacao, registrarCancelamento
 } from "./auditoria.js";
 import {
   MAX_SUBTAREFAS, ESTADO_INFO, proximoEstado, lerSubtarefas, lerPadroes,
@@ -59,15 +61,12 @@ let DEPARTAMENTOS = [];   // so os nomes, para os selects
 
 const PRIORIDADES = ["baixa", "media", "alta"];
 
-// Retencao das tarefas concluidas: uma tarefa fica 30 dias em "Finalizado" e,
-// depois disso, qualquer pessoa pode remove-la pelo botao "Limpar concluídas".
-// Nada e apagado sozinho - a exclusao e sempre uma acao de alguem.
-// A ultima lista do fluxo e a de conclusao: onde vale a retencao de 30 dias.
+// A ultima lista do fluxo e a de conclusao. Uma tarefa que entra nela ganha o
+// botao "Finalizar" (arquiva em cards_finalizados e sai do quadro). Nada some
+// sozinho por tempo.
 function colunaFinal() {
   return COLUNAS.length ? COLUNAS[COLUNAS.length - 1].id : "finalizado";
 }
-
-const DIAS_RETENCAO = 30;
 
 /* --------------------------------------------------------------------------
    2. Estado local (espelho do Firestore, alimentado pelo onSnapshot)
@@ -226,22 +225,6 @@ function finalizadaEm(card) {
   return ts && typeof ts.toDate === "function" ? ts.toDate() : null;
 }
 
-// Dias que ainda faltam para a tarefa poder ser removida (0 = ja liberada,
-// null = sem data conhecida, entao nunca expira sozinha).
-function diasRestantes(card) {
-  const d = finalizadaEm(card);
-  if (!d) return null;
-  const decorridos = (Date.now() - d.getTime()) / MS_POR_DIA;
-  return Math.max(0, Math.ceil(DIAS_RETENCAO - decorridos));
-}
-
-function expirada(card) {
-  return card.coluna === colunaFinal() && diasRestantes(card) === 0;
-}
-
-function cardsExpirados() {
-  return cards.filter(expirada);
-}
 
 // Cards de uma coluna, sempre na mesma ordem: os mais perto de vencer no topo,
 // os folgados abaixo, e os SEM data de termino sempre por ultimo. Nao existe
@@ -627,8 +610,6 @@ function renderColuna(col) {
 
   colDiv.appendChild(list);
 
-  renderBotaoLimpeza(colDiv, col);
-
   // --- alvo de drop -------------------------------------------------------
   colDiv.addEventListener("dragover", (e) => {
     if (!arrastando) return;
@@ -825,67 +806,19 @@ function renderDatas(card, col) {
   </div>`;
 }
 
-// Selo de retencao, so em "Finalizado": quantos dias faltam para a tarefa
-// poder ser removida por qualquer pessoa.
+// Na ultima coluna, mostra desde quando a tarefa esta no quadro final (a data
+// em que ela foi colocada la). Nao ha mais remocao automatica por tempo: a
+// tarefa sai do quadro quando alguem clica em "Finalizar".
 function renderRetencao(card, col) {
   if (col.id !== colunaFinal()) return "";
-
-  const dias = diasRestantes(card);
-  if (dias === null) return "";
-
-  if (dias === 0) {
-    return `<div class="task-retencao liberada" title="Passaram-se ${DIAS_RETENCAO} dias: qualquer pessoa pode remover">
-      <span>🗑</span><span>liberada para exclusão</span>
-    </div>`;
-  }
-
-  const aviso = dias <= 7 ? " perto" : "";
-  return `<div class="task-retencao${aviso}" title="Tarefas concluídas ficam ${DIAS_RETENCAO} dias no quadro">
-    <span>⏳</span><span>sai em ${dias} ${dias === 1 ? "dia" : "dias"}</span>
+  const d = finalizadaEm(card);
+  if (!d) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const txt = `${dd}/${mm}/${d.getFullYear()}`;
+  return `<div class="task-retencao" title="No último quadro desde ${txt}">
+    <span>🏁</span><span>no quadro final desde ${txt}</span>
   </div>`;
-}
-
-// Botao de limpeza da coluna "Finalizado". Aparece so quando ha tarefas que ja
-// passaram dos DIAS_RETENCAO - e qualquer pessoa pode usar.
-function renderBotaoLimpeza(colDiv, col) {
-  if (col.id !== colunaFinal()) return;
-
-  const expirados = cardsExpirados();
-  if (!expirados.length) return;
-
-  const btn = document.createElement("button");
-  btn.className = "limpar-btn";
-  btn.textContent = `🗑 Limpar ${expirados.length} concluída${expirados.length === 1 ? "" : "s"}`;
-  btn.title = `Remove as tarefas que estao ha mais de ${DIAS_RETENCAO} dias em Finalizado`;
-  btn.onclick = () => limparExpiradas();
-  colDiv.appendChild(btn);
-}
-
-async function limparExpiradas() {
-  const expirados = cardsExpirados();
-  if (!expirados.length) return;
-
-  const qtd = expirados.length;
-  const msg =
-    qtd === 1
-      ? `Remover 1 tarefa concluída há mais de ${DIAS_RETENCAO} dias?`
-      : `Remover ${qtd} tarefas concluídas há mais de ${DIAS_RETENCAO} dias?`;
-  if (!confirm(`${msg}
-
-Isso vale para toda a equipe e não tem desfazer.`)) return;
-
-  try {
-    // writeBatch aceita ate 500 operacoes; fatiamos por seguranca.
-    for (let i = 0; i < expirados.length; i += 400) {
-      const lote = writeBatch(db);
-      expirados.slice(i, i + 400).forEach((c) => lote.delete(doc(db, COLECAO_CARDS, c.id)));
-      await lote.commit();
-    }
-    setStatus(`${qtd} ${qtd === 1 ? "tarefa removida" : "tarefas removidas"} do quadro.`);
-  } catch (e) {
-    console.error("[kanban] falha ao limpar concluidas:", e);
-    setStatus("Não foi possível remover as tarefas concluídas.", true);
-  }
 }
 
 /* --------------------------------------------------------------------------
@@ -1072,7 +1005,7 @@ function abrirModal(colunaId, cardId) {
     const alteravel = podeAlterar(card);
     setModalSomenteLeitura(!alteravel);
     $("modalTitle").textContent = alteravel ? "Editar tarefa" : "Ver tarefa (somente leitura)";
-    $("deleteBtn").style.display = alteravel ? "inline" : "none";
+    configurarBotaoSaida(card, alteravel);
     $("hintDono").textContent = !alteravel
       ? "Você não pode alterar esta tarefa — só o dono, o responsável ou um administrador."
       : card.criadoPor === usuario.email
@@ -1096,6 +1029,8 @@ function abrirModal(colunaId, cardId) {
     mostrarDono(usuario ? usuario.email : "");
     setModalSomenteLeitura(false);
     $("deleteBtn").style.display = "none";
+    const fb = $("fFinalizadoBox");
+    if (fb) fb.style.display = "none";
     $("hintDono").textContent = "Quem cria a tarefa é o dono e pode alterá-la e excluí-la depois.";
   }
 
@@ -1153,6 +1088,39 @@ async function pegarTarefaParaMim() {
     console.error("[kanban] falha ao pegar tarefa:", e);
     erroModal.textContent = "Não foi possível pegar a tarefa. Tente novamente.";
     pegar.disabled = false;
+  }
+}
+
+// Na ultima coluna o botao de saida vira "Finalizar" (arquiva em
+// cards_finalizados); nas demais ele "Exclui" (cancela -> cards_cancelados).
+// Tambem mostra desde quando a tarefa esta no quadro final.
+function configurarBotaoSaida(card, alteravel) {
+  const btn = $("deleteBtn");
+  const fb = $("fFinalizadoBox");
+  const naFinal = card.coluna === colunaFinal();
+  const d = naFinal ? finalizadaEm(card) : null;
+
+  if (fb) {
+    if (d) {
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      fb.textContent = `No último quadro desde ${dd}/${mm}/${d.getFullYear()}`;
+      fb.style.display = "";
+    } else {
+      fb.style.display = "none";
+    }
+  }
+
+  if (!alteravel) { btn.style.display = "none"; return; }
+  btn.style.display = "inline";
+  if (naFinal) {
+    btn.textContent = "Finalizar tarefa";
+    btn.dataset.acao = "finalizar";
+    btn.classList.add("finalizar");
+  } else {
+    btn.textContent = "Excluir tarefa";
+    btn.dataset.acao = "cancelar";
+    btn.classList.remove("finalizar");
   }
 }
 
@@ -1361,24 +1329,71 @@ async function salvarTarefa() {
   }
 }
 
-async function excluirTarefa() {
+// Campos do card copiados para a colecao de arquivo.
+function dadosParaArquivo(card) {
+  return {
+    titulo: card.titulo || "",
+    descricao: card.descricao || "",
+    coluna: card.coluna || "",
+    departamento: card.departamento || "",
+    responsavel: card.responsavel || "",
+    responsavelEmail: card.responsavelEmail || "",
+    prioridade: card.prioridade || "media",
+    inicioPrevisto: card.inicioPrevisto || "",
+    fimPrevisto: card.fimPrevisto || "",
+    finalizadoEm: card.finalizadoEm || null,
+    criadoPor: card.criadoPor || "",
+    criadoEm: card.criadoEm || null,
+    subtarefas: card.subtarefas || []
+  };
+}
+
+// Move a tarefa de kanban_cards para uma colecao de arquivo, num lote atomico:
+// ou grava o arquivo e apaga do quadro, ou nada acontece.
+async function arquivarTarefa(card, colecao, status) {
+  const lote = writeBatch(db);
+  lote.set(doc(db, colecao, card.id), {
+    ...dadosParaArquivo(card),
+    status,
+    arquivadoEm: serverTimestamp(),
+    arquivadoPor: usuario ? usuario.email : ""
+  });
+  lote.delete(doc(db, COLECAO_CARDS, card.id));
+  await lote.commit();
+}
+
+async function finalizarTarefa() {
   const card = cardPorId(editando.cardId);
   if (!card) { fecharModal(); return; }
-
   if (!podeAlterar(card)) {
-    erroModal.textContent =
-      "Só o dono, o responsável ou um administrador pode excluir esta tarefa.";
+    erroModal.textContent = "Só o dono, o responsável, o supervisor ou um administrador pode finalizar esta tarefa.";
     return;
   }
-
-  if (!confirm(`Excluir a tarefa "${card.titulo}"? Isso vale para toda a equipe.`)) return;
-
+  if (!confirm(`Finalizar a tarefa "${card.titulo}"?\n\nEla sai do quadro e passa a aparecer só no relatório.`)) return;
   try {
-    await deleteDoc(doc(db, COLECAO_CARDS, editando.cardId));
-    registrarExclusao(card, quemSouEu());
+    await arquivarTarefa(card, COLECAO_FINALIZADOS, "finalizado");
+    registrarFinalizacao(card, quemSouEu());
     fecharModal();
   } catch (e) {
-    console.error("[kanban] falha ao excluir:", e);
+    console.error("[kanban] falha ao finalizar:", e);
+    erroModal.textContent = "Erro ao finalizar. Tente novamente.";
+  }
+}
+
+async function cancelarTarefa() {
+  const card = cardPorId(editando.cardId);
+  if (!card) { fecharModal(); return; }
+  if (!podeAlterar(card)) {
+    erroModal.textContent = "Só o dono, o responsável, o supervisor ou um administrador pode excluir esta tarefa.";
+    return;
+  }
+  if (!confirm(`Excluir a tarefa "${card.titulo}"?\n\nEla sai do quadro e fica registrada como cancelada no relatório.`)) return;
+  try {
+    await arquivarTarefa(card, COLECAO_CANCELADOS, "cancelado");
+    registrarCancelamento(card, quemSouEu());
+    fecharModal();
+  } catch (e) {
+    console.error("[kanban] falha ao cancelar:", e);
     erroModal.textContent = "Erro ao excluir. Tente novamente.";
   }
 }
@@ -1388,7 +1403,10 @@ async function excluirTarefa() {
    -------------------------------------------------------------------------- */
 
 $("saveBtn").onclick = salvarTarefa;
-$("deleteBtn").onclick = excluirTarefa;
+$("deleteBtn").onclick = () => {
+  if ($("deleteBtn").dataset.acao === "finalizar") finalizarTarefa();
+  else cancelarTarefa();
+};
 $("pegarBtn").onclick = pegarTarefaParaMim;
 $("cancelBtn").onclick = fecharModal;
 

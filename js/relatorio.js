@@ -9,7 +9,8 @@
    ========================================================================== */
 
 import {
-  db, COLECAO_CARDS, COLECAO_DEPARTAMENTOS
+  db, COLECAO_CARDS, COLECAO_DEPARTAMENTOS,
+  COLECAO_FINALIZADOS, COLECAO_CANCELADOS
 } from "./firebase-config.js";
 import { protegerPagina, montarBarraUsuario, ajustarSubmenu } from "./auth.js";
 import { colunasDe, lerColunas } from "./colunas.js";
@@ -31,8 +32,10 @@ let usuario = null;
 let cards = [];
 let departamentos = [];      // [{id, nome, colunas}]
 let conectado = false;
-let unsubCards = null;
+let unsubs = [];
 let depAssinado = null;
+// Tarefas por origem: ativas (quadro), finalizadas e canceladas (arquivo).
+const fontes = { ativa: [], finalizada: [], cancelada: [] };
 
 const $ = (id) => document.getElementById(id);
 
@@ -95,50 +98,72 @@ function soVeProprias() {
     && !usuario.permissao.supervisor && !usuario.permissao.veTudo);
 }
 
+function mapCard(d, situacao) {
+  const dados = d.data({ serverTimestamps: "estimate" });
+  return {
+    id: d.id,
+    titulo: dados.titulo || "",
+    descricao: dados.descricao || "",
+    coluna: dados.coluna || "",
+    departamento: dados.departamento || "",
+    responsavel: dados.responsavel || "",
+    responsavelEmail: (dados.responsavelEmail || "").toLowerCase(),
+    prioridade: dados.prioridade || "media",
+    inicioPrevisto: typeof dados.inicioPrevisto === "string" ? dados.inicioPrevisto : "",
+    fimPrevisto: typeof dados.fimPrevisto === "string" ? dados.fimPrevisto : "",
+    subtarefas: lerSubtarefas(dados),
+    criadoPor: (dados.criadoPor || "").toLowerCase(),
+    situacao
+  };
+}
+
+// Consulta de uma colecao, respeitando o papel. Usuario comum so le as proprias
+// (no quadro, tambem as sem responsavel; no arquivo, so onde ele e o responsavel).
+function consultaDe(col) {
+  const dep = $("filtroDep").value;
+  const ref = collection(db, col);
+  if (!soVeProprias()) return query(ref, where("departamento", "==", dep));
+  if (col === COLECAO_CARDS) {
+    return query(ref, where("departamento", "==", dep),
+      where("responsavelEmail", "in", [usuario.email, ""]));
+  }
+  return query(ref, where("departamento", "==", dep),
+    where("responsavelEmail", "==", usuario.email));
+}
+
+function rebuildCards() {
+  cards = [...fontes.ativa, ...fontes.finalizada, ...fontes.cancelada];
+  montarFiltroResponsavel();
+  render();
+}
+
 function escutarCards() {
   const dep = $("filtroDep").value;
-  if (unsubCards) { unsubCards(); unsubCards = null; }
+  unsubs.forEach((u) => u());
+  unsubs = [];
   depAssinado = dep;
+  fontes.ativa = []; fontes.finalizada = []; fontes.cancelada = [];
 
   if (!dep) { cards = []; render(); return; }
 
   const opcoes = { includeMetadataChanges: true };
-  const consulta = soVeProprias()
-    ? query(collection(db, COLECAO_CARDS),
-        where("departamento", "==", dep),
-        where("responsavelEmail", "in", [usuario.email, ""]))
-    : query(collection(db, COLECAO_CARDS), where("departamento", "==", dep));
-  unsubCards = onSnapshot(
-    consulta,
-    opcoes,
-    (snap) => {
-    cards = snap.docs.map((d) => {
-      const dados = d.data({ serverTimestamps: "estimate" });
-      return {
-        id: d.id,
-        titulo: dados.titulo || "",
-        descricao: dados.descricao || "",
-        coluna: dados.coluna || "",
-        departamento: dados.departamento || "",
-        responsavel: dados.responsavel || "",
-        prioridade: dados.prioridade || "media",
-        inicioPrevisto: typeof dados.inicioPrevisto === "string" ? dados.inicioPrevisto : "",
-        fimPrevisto: typeof dados.fimPrevisto === "string" ? dados.fimPrevisto : "",
-        subtarefas: lerSubtarefas(dados),
-        criadoPor: (dados.criadoPor || "").toLowerCase()
-      };
-    });
-
-    if (!snap.metadata.fromCache) {
-      conectado = true;
-      setLive(true, snap.metadata.hasPendingWrites ? "salvando…" : "ao vivo");
-    } else if (!conectado) {
-      setLive(false, "sem conexão");
-    }
-
-    montarFiltroResponsavel();
-    render();
-  }, erroDe("tarefas"));
+  [
+    [COLECAO_CARDS, "ativa"],
+    [COLECAO_FINALIZADOS, "finalizada"],
+    [COLECAO_CANCELADOS, "cancelada"]
+  ].forEach(([col, situacao]) => {
+    const u = onSnapshot(consultaDe(col), opcoes, (snap) => {
+      fontes[situacao] = snap.docs.map((d) => mapCard(d, situacao));
+      if (!snap.metadata.fromCache) {
+        conectado = true;
+        setLive(true, snap.metadata.hasPendingWrites ? "salvando…" : "ao vivo");
+      } else if (!conectado) {
+        setLive(false, "sem conexão");
+      }
+      rebuildCards();
+    }, erroDe(situacao === "ativa" ? "tarefas" : "arquivo"));
+    unsubs.push(u);
+  });
 }
 
 function erroDe(qual) {
@@ -274,6 +299,13 @@ function nomeDaLista(dep, colunaId) {
   return col ? col.nome : "—";
 }
 
+// Situacao da tarefa na coluna "Estado" do relatorio.
+function estadoTag(card, ehFinal) {
+  if (card.situacao === "finalizada") return '<span class="tag-ok">finalizada</span>';
+  if (card.situacao === "cancelada") return '<span class="tag-cancel">cancelada</span>';
+  return ehFinal ? '<span class="tag-ok">concluída</span>' : "";
+}
+
 function render() {
   const corpo = $("corpo");
   const dep = depAtual();
@@ -321,7 +353,7 @@ function render() {
           ${card.responsavel ? `<span class="resp">${escapeHtml(card.responsavel)}</span>` : ""}
         </div>
       </td>
-      <td class="col-estado">${ehFinal ? '<span class="tag-ok">concluída</span>' : ""}</td>
+      <td class="col-estado">${estadoTag(card, ehFinal)}</td>
       <td class="col-lista">${escapeHtml(nomeDaLista(dep, card.coluna))}</td>
       <td class="col-data">${escapeHtml(formatarDataISO(card.inicioPrevisto) || "—")}</td>
       <td class="col-data">${escapeHtml(formatarDataISO(card.fimPrevisto) || "—")}</td>
