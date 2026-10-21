@@ -88,6 +88,13 @@ function escutar() {
 
 // Assina (ou re-assina) os cards SO do departamento escolhido. A regra do
 // Firestore so libera a leitura quando a query pede um departamento permitido.
+// Usuario comum (nem admin, nem supervisor, nem "ve tudo") so pode ler as
+// tarefas em que ele e o responsavel - igual ao quadro.
+function soVeProprias() {
+  return !!(usuario && !usuario.permissao.admin
+    && !usuario.permissao.supervisor && !usuario.permissao.veTudo);
+}
+
 function escutarCards() {
   const dep = $("filtroDep").value;
   if (unsubCards) { unsubCards(); unsubCards = null; }
@@ -96,8 +103,13 @@ function escutarCards() {
   if (!dep) { cards = []; render(); return; }
 
   const opcoes = { includeMetadataChanges: true };
+  const consulta = soVeProprias()
+    ? query(collection(db, COLECAO_CARDS),
+        where("departamento", "==", dep),
+        where("responsavelEmail", "==", usuario.email))
+    : query(collection(db, COLECAO_CARDS), where("departamento", "==", dep));
   unsubCards = onSnapshot(
-    query(collection(db, COLECAO_CARDS), where("departamento", "==", dep)),
+    consulta,
     opcoes,
     (snap) => {
     cards = snap.docs.map((d) => {

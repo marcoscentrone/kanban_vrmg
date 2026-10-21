@@ -138,9 +138,20 @@ service cloud.firestore {
           && (!('prioridade' in d) || d.prioridade in ['baixa', 'media', 'alta']);
       }
 
-      // Ler: so quem ve o departamento da tarefa (admin/veTudo veem todos).
+      // Ler:
+      //   . admin / quem ve tudo  -> qualquer tarefa
+      //   . supervisor            -> qualquer tarefa do(s) departamento(s) dele
+      //   . usuario comum         -> SO as tarefas em que ele e o responsavel,
+      //                              dentro do departamento dele (nao ve tarefas
+      //                              de outras pessoas do grupo).
+      // A consulta do cliente precisa refletir isso: o usuario comum consulta
+      // por departamento E responsavelEmail == o proprio e-mail.
       allow read: if modoAberto() || souDono()
-        || (doDominio() && (veTudoCards() || resource.data.departamento in meusDeps()));
+        || (doDominio() && (
+              veTudoCards()
+              || supervisionaDepto(resource.data.departamento)
+              || (resource.data.departamento in meusDeps() && responsavelDaTarefa())
+           ));
 
       // Criar: pessoa do dominio, respeitando o schema.
       allow create: if modoAberto() || souDono() || (doDominio() && cardValido());

@@ -77,6 +77,7 @@ let cards = [];                                  // [{id, titulo, coluna, ...}]
 let editando = { colunaId: null, cardId: null }; // alvo do modal
 let arrastando = null;                           // id do card em drag
 let filtroDepartamento = "";   // departamento de trabalho (sempre um)
+let filtroResponsavel = "";    // e-mail do responsavel filtrado ("" = todos)
 let unsubCards = null;          // cancela a assinatura dos cards do depto atual
 let departamentoAssinado = null;
 let usuario = null;   // { user, email, permissao } - preenchido no boot
@@ -108,6 +109,7 @@ const liveText   = $("liveText");
 const overlay    = $("overlay");
 
 const filtroSel  = $("filtroDepartamento");
+const filtroRespSel = $("filtroResponsavel");
 const erroModal  = $("modalError");
 
 /* --------------------------------------------------------------------------
@@ -279,12 +281,22 @@ function porCriacao(a, b) {
   return ta - tb;
 }
 
+// Usuario comum (nem admin, nem supervisor, nem "ve tudo"): so enxerga as
+// tarefas em que ele e o responsavel - nunca as de outras pessoas do grupo.
+function soVeProprias() {
+  return !!(usuario && !usuario.permissao.admin
+    && !usuario.permissao.supervisor && !usuario.permissao.veTudo);
+}
+
 function cardsVisiveis(colunaId) {
   // O quadro trabalha sempre dentro de um departamento, entao o recorte por
-  // permissao ja esta garantido pela lista do seletor.
-  return cardsDaColuna(colunaId).filter(
-    (c) => (c.departamento || "") === filtroDepartamento
-  );
+  // departamento ja esta garantido pela lista do seletor. O filtro de
+  // responsavel afina ainda mais (para o usuario comum ele fica travado nele).
+  return cardsDaColuna(colunaId).filter((c) => {
+    if ((c.departamento || "") !== filtroDepartamento) return false;
+    if (filtroResponsavel && (c.responsavelEmail || "") !== filtroResponsavel) return false;
+    return true;
+  });
 }
 
 // "marcos.centrone@vrbelohorizonte.com.br" -> "Marcos Centrone"
@@ -338,9 +350,19 @@ function escutarQuadro() {
   }, 20000);
 
   // Sem orderBy no servidor de proposito: a ordenacao e feita no cliente por
-  // urgencia (prazo de termino). Assim nao e preciso indice composto no Firestore
+  // urgencia (prazo de termino). Assim nao e preciso indice composto no Firestore.
+  //
+  // Usuario comum so pode LER as proprias tarefas (regra do Firestore): a
+  // consulta ja pede responsavelEmail == o e-mail dele. Admin/supervisor leem o
+  // departamento inteiro, e o filtro de responsavel deles e aplicado no cliente.
+  const consulta = soVeProprias()
+    ? query(cardsRef,
+        where("departamento", "==", filtroDepartamento),
+        where("responsavelEmail", "==", usuario.email))
+    : query(cardsRef, where("departamento", "==", filtroDepartamento));
+
   unsubCards = onSnapshot(
-    query(cardsRef, where("departamento", "==", filtroDepartamento)),
+    consulta,
     // includeMetadataChanges: sem isto, quando os dados do servidor sao iguais
     // aos do cache o callback nao dispara de novo - e o indicador ficaria preso
     // em "sem conexao" mesmo com o quadro ja sincronizado.
@@ -397,6 +419,7 @@ function escutarQuadro() {
       );
 
       montarSugestoes();
+      preencherSelectResponsavel();
       render();
     },
     (erro) => {
@@ -419,15 +442,24 @@ function escutarPessoas() {
     collection(db, COLECAO_ACESSOS),
     (snap) => {
       PESSOAS = snap.docs
-        .map((d) => (d.data().email || d.id || "").toLowerCase())
-        .filter((e) => e.includes("@"))
-        .map((e) => ({ nome: nomeDoEmail(e), email: e }));
+        .map((d) => {
+          const dd = d.data();
+          const email = (dd.email || d.id || "").toLowerCase();
+          return {
+            nome: nomeDoEmail(email),
+            email,
+            departamentos: Array.isArray(dd.departamentos) ? dd.departamentos : []
+          };
+        })
+        .filter((p) => p.email.includes("@"));
       montarSugestoes();
+      preencherSelectResponsavel();
     },
     (erro) => {
       // Sem permissao de leitura o campo simplesmente fica sem sugestoes.
       console.warn("[kanban] sem sugestões de responsável:", erro.code || erro);
       montarSugestoes();
+      preencherSelectResponsavel();
     }
   );
 }
@@ -911,6 +943,53 @@ function departamentosDisponiveis() {
   return DEPARTAMENTOS.filter((d) => usuario.permissao.departamentos.includes(d));
 }
 
+// Pessoas que podem aparecer como responsavel num departamento: os cadastrados
+// nele (kanban_acessos) mais quem ja figura como responsavel nas tarefas
+// carregadas desse departamento.
+function pessoasDoDepartamento(dep) {
+  const mapa = new Map(); // email -> nome
+  if (!dep) return [];
+  PESSOAS.forEach((p) => {
+    if ((p.departamentos || []).includes(dep)) mapa.set(p.email, p.nome);
+  });
+  cards.forEach((c) => {
+    if ((c.departamento || "") === dep && c.responsavelEmail && !mapa.has(c.responsavelEmail)) {
+      mapa.set(c.responsavelEmail, c.responsavel || nomeDoEmail(c.responsavelEmail));
+    }
+  });
+  return Array.from(mapa, ([email, nome]) => ({ email, nome }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+// Preenche o seletor de Responsavel conforme o papel:
+//   . usuario comum    -> travado nele mesmo (so ve as proprias tarefas)
+//   . admin/supervisor -> "Todos" + as pessoas do departamento selecionado
+function preencherSelectResponsavel() {
+  if (!filtroRespSel) return;
+
+  if (soVeProprias()) {
+    filtroResponsavel = usuario.email;
+    filtroRespSel.innerHTML =
+      `<option value="${escapeHtml(usuario.email)}">${escapeHtml(nomeDoEmail(usuario.email))}</option>`;
+    filtroRespSel.value = usuario.email;
+    filtroRespSel.disabled = true;
+    return;
+  }
+
+  filtroRespSel.disabled = false;
+  const pessoas = pessoasDoDepartamento(filtroDepartamento);
+  filtroRespSel.innerHTML = '<option value="">Todos</option>' +
+    pessoas.map((p) => `<option value="${escapeHtml(p.email)}">${escapeHtml(p.nome)}</option>`).join("");
+
+  // Mantem a selecao se o responsavel ainda existe na lista; senao, "Todos".
+  if (filtroResponsavel && pessoas.some((p) => p.email === filtroResponsavel)) {
+    filtroRespSel.value = filtroResponsavel;
+  } else {
+    filtroResponsavel = "";
+    filtroRespSel.value = "";
+  }
+}
+
 // O seletor do topo escolhe o departamento de trabalho - nao existe "Todos",
 // porque cada departamento tem seu proprio fluxo de listas.
 function preencherSelectsDepartamento() {
@@ -1233,9 +1312,18 @@ $("fAssignee").addEventListener("input", () => {
 
 filtroSel.addEventListener("change", () => {
   filtroDepartamento = filtroSel.value;
+  filtroResponsavel = "";            // novo departamento = outras pessoas
   aplicarFluxoDoDepartamento();
   lembrarDepartamento();
+  preencherSelectResponsavel();
   escutarQuadro();   // re-assina os cards do novo departamento
+  render();
+});
+
+// Filtro de responsavel: afina o que o quadro mostra (no cliente). Para o
+// usuario comum o seletor fica travado nele, entao este handler nem dispara.
+filtroRespSel.addEventListener("change", () => {
+  filtroResponsavel = filtroRespSel.value;
   render();
 });
 
@@ -1281,6 +1369,7 @@ protegerPagina().then((logado) => {
 
   recuperarDepartamento();
   preencherSelectsDepartamento();
+  preencherSelectResponsavel();
   escutarDepartamentos();
   escutarPessoas();
   escutarQuadro();
