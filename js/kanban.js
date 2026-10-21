@@ -1177,12 +1177,30 @@ function mostrarDono(email) {
 // Rascunho: as etapas so vao para o Firestore quando a tarefa e salva.
 let subsRascunho = [];
 
+// Sugestoes para o campo "Nova etapa": as subtarefas-padrao do departamento da
+// tarefa que ainda nao foram adicionadas. A pessoa pode escolher uma delas ou
+// digitar uma etapa nova.
+function montarSugestoesSub() {
+  const lista = $("listaSubsPadrao");
+  if (!lista) return;
+  const depNome = $("fDepartamento") ? $("fDepartamento").value : "";
+  const dep = DEPARTAMENTOS_FULL.find((d) => d.nome === depNome);
+  const padroes = dep ? (dep.subtarefasPadrao || []) : [];
+  const jaUsados = new Set(subsRascunho.map((s) => (s.nome || "").trim().toLowerCase()));
+
+  lista.innerHTML = padroes
+    .filter((n) => n && !jaUsados.has(n.trim().toLowerCase()))
+    .map((n) => `<option value="${escapeHtml(n)}"></option>`)
+    .join("");
+}
+
 function renderSubsModal() {
   const box = $("subsModal");
   const form = $("addSubBox");
 
   $("contaSubsModal").textContent = `${subsRascunho.length}/${MAX_SUBTAREFAS}`;
   form.style.display = subsRascunho.length >= MAX_SUBTAREFAS ? "none" : "flex";
+  montarSugestoesSub();
 
   if (!subsRascunho.length) {
     box.innerHTML = '<p class="subs-vazio">Nenhuma etapa. Adicione abaixo, se precisar.</p>';
@@ -1388,6 +1406,7 @@ $("fDepartamento").addEventListener("change", () => {
   );
   if (!aindaVale) $("fAssignee").value = "";
   montarSugestoes($("fAssignee").value.trim());
+  montarSugestoesSub();
 });
 
 filtroSel.addEventListener("change", () => {
