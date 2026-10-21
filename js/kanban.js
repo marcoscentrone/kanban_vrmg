@@ -478,8 +478,15 @@ function montarSugestoes(nomeAtual = "") {
   const lista = $("listaPessoas");
   if (!lista) return;
 
+  // So sugere as pessoas que fazem parte do departamento escolhido no modal -
+  // nao a lista inteira. Sem departamento definido, cai para todos (fallback).
+  const dep = $("fDepartamento") ? $("fDepartamento").value : "";
+  const fonte = dep
+    ? PESSOAS.filter((p) => (p.departamentos || []).includes(dep))
+    : PESSOAS;
+
   const vistos = new Map();
-  PESSOAS.forEach((p) => vistos.set(p.nome.toLowerCase(), p));
+  fonte.forEach((p) => vistos.set(p.nome.toLowerCase(), p));
 
   const atual = (nomeAtual || "").trim();
   if (atual && !vistos.has(atual.toLowerCase())) {
@@ -1370,6 +1377,18 @@ $("fAssignee").addEventListener("input", () => {
     ? "Comece a digitar para ver quem está cadastrado. Pode ser outra pessoa."
     : "Nome não cadastrado — escolha alguém da lista.";
   $("hintResponsavel").classList.toggle("erro", !ok);
+});
+
+// Trocar o departamento no modal refaz as sugestoes de responsavel (so as
+// pessoas daquele departamento) e limpa o nome se ele nao faz parte do novo.
+$("fDepartamento").addEventListener("change", () => {
+  const nome = $("fAssignee").value.trim();
+  const dep = $("fDepartamento").value;
+  const aindaVale = !nome || PESSOAS.some(
+    (p) => p.nome.toLowerCase() === nome.toLowerCase() && (p.departamentos || []).includes(dep)
+  );
+  if (!aindaVale) $("fAssignee").value = "";
+  montarSugestoes($("fAssignee").value.trim());
 });
 
 filtroSel.addEventListener("change", () => {
