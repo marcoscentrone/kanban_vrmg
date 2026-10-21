@@ -8,6 +8,10 @@
     "ignore": [
       "firebase.json",
       "**/.*",
+      "**/.*/**",
+      ".git/**",
+      ".claude/**",
+      ".firebase/**",
       "**/node_modules/**",
       "servidor.py",
       "servir.bat",
