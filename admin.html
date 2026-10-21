@@ -45,7 +45,7 @@
   <div class="admin-grid">
 
     <!-- ============ Departamentos ============ -->
-    <section class="painel">
+    <section class="painel" id="painelDepartamentos">
       <div class="painel-head">
         <h2>Departamentos</h2>
         <span class="contador" id="contaDepartamentos">0</span>
@@ -66,7 +66,7 @@
     </section>
 
     <!-- ============ Acessos por e-mail ============ -->
-    <section class="painel">
+    <section class="painel" id="painelAcessos">
       <div class="painel-head">
         <h2>Acessos por e-mail</h2>
         <span class="contador" id="contaAcessos">0</span>
@@ -81,7 +81,11 @@
         <div class="checkboxes" id="checkboxesDepartamentos"></div>
         <label class="check-admin">
           <input type="checkbox" id="ehAdmin">
-          <span>Administrador — pode abrir esta página</span>
+          <span>Administrador — pode abrir esta página e faz tudo</span>
+        </label>
+        <label class="check-admin">
+          <input type="checkbox" id="ehSupervisor">
+          <span>Supervisor — nos departamentos marcados, mexe em todas as tarefas e edita as listas/subtarefas (não gerencia acessos)</span>
         </label>
 
         <div class="form-acoes">

@@ -46,6 +46,7 @@ let cards = [];           // so para saber quantas tarefas usam cada departament
 
 let editandoDepartamento = null; // id
 let editandoAcesso = null;       // id (= e-mail)
+let permissaoAtual = null;       // permissao de quem abriu a pagina (admin/supervisor)
 
 const refDepartamentos = collection(db, COLECAO_DEPARTAMENTOS);
 const refAcessos = collection(db, COLECAO_ACESSOS);
@@ -143,7 +144,8 @@ function escutarTudo() {
         id: d.id,
         email: d.data().email || d.id,
         departamentos: Array.isArray(d.data().departamentos) ? d.data().departamentos : [],
-        admin: d.data().admin === true
+        admin: d.data().admin === true,
+        supervisor: d.data().supervisor === true
       }))
       .sort((a, b) => a.email.localeCompare(b.email, "pt-BR"));
 
@@ -436,18 +438,28 @@ function depAtual() {
   return departamentos.find((d) => d.id === depSelecionado) || null;
 }
 
+// Admin ve todos os departamentos; supervisor so os que supervisiona.
+function departamentosVisiveis() {
+  if (permissaoAtual && permissaoAtual.supervisor && !permissaoAtual.admin) {
+    const meus = permissaoAtual.departamentos || [];
+    return departamentos.filter((d) => meus.includes(d.nome));
+  }
+  return departamentos;
+}
+
 function renderSelectColunas() {
   const sel = $("depColunas");
   const anterior = sel.value;
+  const lista = departamentosVisiveis();
 
   sel.innerHTML = '<option value="">- escolha um departamento -</option>' +
-    departamentos
+    lista
       .map((d) => `<option value="${escapeHtml(d.id)}">${escapeHtml(d.nome)}</option>`)
       .join("");
 
   // mantem a selecao entre atualizacoes em tempo real
-  if (departamentos.some((d) => d.id === anterior)) sel.value = anterior;
-  else if (departamentos.some((d) => d.id === depSelecionado)) sel.value = depSelecionado;
+  if (lista.some((d) => d.id === anterior)) sel.value = anterior;
+  else if (lista.some((d) => d.id === depSelecionado)) sel.value = depSelecionado;
   depSelecionado = sel.value;
 }
 
@@ -803,7 +815,7 @@ function renderAcessos() {
 
     li.innerHTML = `
       <div class="item-corpo">
-        <div class="item-nome">${escapeHtml(ac.email)}${ac.admin ? ' <span class="tag-admin">admin</span>' : ""}</div>
+        <div class="item-nome">${escapeHtml(ac.email)}${ac.admin ? ' <span class="tag-admin">admin</span>' : ""}${ac.supervisor && !ac.admin ? ' <span class="tag-sup">supervisor</span>' : ""}</div>
         ${tags}
       </div>
       <div class="item-acoes">
@@ -822,6 +834,7 @@ function editarAcesso(ac) {
   $("novoEmail").value = ac.email;
   $("novoEmail").disabled = true; // o e-mail e a chave do documento
   $("ehAdmin").checked = !!ac.admin;
+  $("ehSupervisor").checked = !!ac.supervisor;
   renderCheckboxes(ac.departamentos);
   $("salvarAcesso").textContent = "Salvar alterações";
   $("cancelarAcesso").style.display = "inline-block";
@@ -835,6 +848,7 @@ function limparFormAcesso() {
   $("novoEmail").value = "";
   $("novoEmail").disabled = false;
   $("ehAdmin").checked = false;
+  $("ehSupervisor").checked = false;
   renderCheckboxes();
   $("salvarAcesso").textContent = "Adicionar acesso";
   $("cancelarAcesso").style.display = "none";
@@ -860,6 +874,24 @@ $("formAcesso").addEventListener("submit", async (e) => {
   }
 
   const marcados = departamentosMarcados();
+  const ehAdmin = $("ehAdmin").checked;
+  const ehSup = $("ehSupervisor").checked;
+
+  // Supervisor so tem poder dentro dos departamentos marcados - sem nenhum
+  // marcado, "supervisor" nao significaria nada.
+  if (ehSup && !ehAdmin && marcados.length === 0) {
+    $("erroAcesso").textContent = "Supervisor precisa de pelo menos um departamento marcado.";
+    return;
+  }
+
+  // Regra do ultimo administrador: nao deixa retirar o admin de alguem se isso
+  // deixar o sistema sem nenhum administrador.
+  if (editandoAcesso && !ehAdmin && removendoUltimoAdmin(editandoAcesso)) {
+    $("erroAcesso").textContent =
+      "É obrigatório ter pelo menos um administrador. Marque outro administrador antes de retirar este.";
+    return;
+  }
+
   const btn = $("salvarAcesso");
   btn.disabled = true;
 
@@ -870,7 +902,8 @@ $("formAcesso").addEventListener("submit", async (e) => {
       {
         email,
         departamentos: marcados,
-        admin: $("ehAdmin").checked,
+        admin: ehAdmin,
+        supervisor: ehSup,
         atualizadoEm: serverTimestamp(),
         ...(editandoAcesso ? {} : { criadoEm: serverTimestamp() })
       },
@@ -893,7 +926,20 @@ $("formAcesso").addEventListener("submit", async (e) => {
   }
 });
 
+// true se `email` e administrador hoje e nao existe NENHUM outro administrador
+// cadastrado - ou seja, tirar o admin dele deixaria o sistema sem nenhum.
+function removendoUltimoAdmin(email) {
+  const alvo = acessos.find((a) => a.id === email);
+  if (!alvo || !alvo.admin) return false;
+  return acessos.filter((a) => a.admin && a.id !== email).length === 0;
+}
+
 async function excluirAcesso(ac) {
+  if (ac.admin && removendoUltimoAdmin(ac.id)) {
+    $("erroAcesso").textContent =
+      "É obrigatório ter pelo menos um administrador. Este é o único — marque outro como administrador antes de remover.";
+    return;
+  }
   if (!confirm(`Remover o acesso de ${ac.email}?`)) return;
   try {
     await deleteDoc(doc(db, COLECAO_ACESSOS, ac.id));
@@ -915,11 +961,13 @@ async function excluirAcesso(ac) {
 // usuario autenticado consegue entrar e se cadastrar - senao o cadastro nasceria
 // trancado, sem ninguem capaz de abrir.
 protegerPagina({ exigirAdmin: false }).then(async (logado) => {
+  const ehSupervisor = logado.permissao.supervisor === true;
   const temAdmin = ADMIN_ABERTO ? false : await existeAlgumAdmin();
   // "erro" = nem deu para consultar (regras do Firestore). Deixa entrar para
   // que a propria tela mostre o erro real de leitura, em vez de um "sem
   // permissao" enganoso.
-  const podeEntrar = logado.permissao.admin || temAdmin !== true;
+  // Supervisor entra numa versao limitada (so listas/subtarefas dos deps dele).
+  const podeEntrar = logado.permissao.admin || ehSupervisor || temAdmin !== true;
 
   if (!podeEntrar) {
     document.body.innerHTML =
@@ -934,10 +982,27 @@ protegerPagina({ exigirAdmin: false }).then(async (logado) => {
     return;
   }
 
+  permissaoAtual = logado.permissao;
   montarBarraUsuario($("barraUsuario"), logado);
   ajustarSubmenu(logado.permissao);
+
+  // Supervisor (que nao e admin) so gerencia listas/subtarefas dos deps dele:
+  // esconde os paineis de Departamentos e de Acessos.
+  if (ehSupervisor && !logado.permissao.admin) aplicarModoSupervisor();
+
   renderCheckboxes();
   renderColunas();
   renderSubs();
   escutarTudo();
 });
+
+// Deixa a tela de configuracao so com o painel de Listas/Subtarefas.
+function aplicarModoSupervisor() {
+  const dep = $("painelDepartamentos");
+  const ace = $("painelAcessos");
+  if (dep) dep.style.display = "none";
+  if (ace) ace.style.display = "none";
+  const sub = document.querySelector(".topbar p");
+  if (sub) sub.textContent =
+    "VR Software — Unidade Minas Gerais · listas e subtarefas dos seus departamentos";
+}

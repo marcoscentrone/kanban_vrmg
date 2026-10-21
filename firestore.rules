@@ -80,6 +80,18 @@ service cloud.firestore {
       return souAdmin() || !temCadastro() || meusDeps().size() == 0;
     }
 
+    // Supervisor: faz tudo no(s) departamento(s) que acompanha - tanto as
+    // tarefas quanto as listas/subtarefas-padrao do departamento. NAO ve outros
+    // departamentos nem gerencia acessos (isso continua so com administrador).
+    function ehSupervisor() {
+      return temCadastro()
+        && get(/databases/$(database)/documents/kanban_acessos/$(meuEmail())).data.supervisor == true;
+    }
+
+    function supervisionaDepto(dep) {
+      return ehSupervisor() && dep in meusDeps();
+    }
+
     // ---------------- Tarefas ----------------
     match /kanban_cards/{cardId} {
 
@@ -104,8 +116,11 @@ service cloud.firestore {
       }
 
       // A MESMA regra do podeAlterar() da interface, agora no servidor.
+      // O supervisor do departamento da tarefa tambem pode mexer em qualquer
+      // tarefa daquele departamento.
       function podeMexer() {
-        return souAdmin() || donoDaTarefa() || responsavelDaTarefa() || semDonoReal();
+        return souAdmin() || donoDaTarefa() || responsavelDaTarefa() || semDonoReal()
+          || supervisionaDepto(resource.data.departamento);
       }
 
       // Validacao de tamanho/tipo dos campos, para barrar documentos gigantes
@@ -137,10 +152,30 @@ service cloud.firestore {
     }
 
     // ---------------- Departamentos ----------------
-    // Todos os logados leem (o quadro precisa da lista); so admin altera.
+    // Todos os logados leem (o quadro precisa da lista). Criar, excluir e
+    // renomear um departamento continua so com administrador. O SUPERVISOR do
+    // departamento pode editar apenas as listas e as subtarefas-padrao dele.
     match /kanban_departamentos/{departamentoId} {
-      allow read:  if modoAberto() || souDono() || doDominio();
-      allow write: if modoAberto() || souAdmin();
+      function supervisionaEste() {
+        return ehSupervisor() && resource.data.nome in meusDeps();
+      }
+      // So deixa mexer em colunas/subtarefasPadrao (e no carimbo atualizadoEm) -
+      // nunca no nome ou em outros campos.
+      function soListasESubs() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['colunas', 'subtarefasPadrao', 'atualizadoEm']);
+      }
+      function listasSubsValidas() {
+        let d = request.resource.data;
+        return (!('colunas' in d) || (d.colunas is list && d.colunas.size() <= 6))
+          && (!('subtarefasPadrao' in d) || (d.subtarefasPadrao is list && d.subtarefasPadrao.size() <= 6));
+      }
+
+      allow read:   if modoAberto() || souDono() || doDominio();
+      allow create: if modoAberto() || souAdmin();
+      allow delete: if modoAberto() || souAdmin();
+      allow update: if modoAberto() || souAdmin()
+        || (doDominio() && supervisionaEste() && soListasESubs() && listasSubsValidas());
     }
 
     // ---------------- Acessos (e-mail -> departamentos) ----------------

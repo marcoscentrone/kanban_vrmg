@@ -170,9 +170,18 @@ function temDonoReal(card) {
 function podeAlterar(card) {
   if (!card || !usuario) return false;
   if (usuario.permissao.admin) return true;
+  if (ehSupervisorDoDepto(card.departamento)) return true;
   if (!temDonoReal(card)) return true;
   if (card.criadoPor === usuario.email) return true;
   return ehOResponsavel(card);
+}
+
+// Supervisor do departamento da tarefa: pode mexer em qualquer tarefa dele,
+// mesmo sem ser dono nem responsavel. Espelha a regra do Firestore.
+function ehSupervisorDoDepto(dep) {
+  if (!usuario || !usuario.permissao.supervisor) return false;
+  const deps = usuario.permissao.departamentos || [];
+  return !!dep && deps.includes(dep);
 }
 
 // E-mail do responsavel, a partir do nome escolhido (so cadastrados tem e-mail).
@@ -1241,7 +1250,9 @@ async function mostrarAtalhoAdmin(logado) {
   const link = $("linkAdmin");
   if (!link) return;
 
-  if (logado.permissao.admin) {
+  // Admin e supervisor entram na Configuracao (o supervisor numa versao
+  // limitada: so as listas/subtarefas do departamento dele).
+  if (logado.permissao.admin || logado.permissao.supervisor) {
     link.style.display = "inline-flex";
     return;
   }

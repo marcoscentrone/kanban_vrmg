@@ -146,14 +146,14 @@ export function sair() {
 // EXIGIR_CADASTRO estiver desligado - e nesse caso ve tudo.
 export async function carregarPermissao(email) {
   const semCadastro = {
-    departamentos: [], veTudo: true, admin: false, cadastrado: false
+    departamentos: [], veTudo: true, admin: false, supervisor: false, cadastrado: false
   };
   if (!email) return semCadastro;
 
   // O dono passa direto: acesso total sem depender de leitura do banco. Assim
   // ele consegue configurar tudo mesmo com kanban_acessos ainda vazia.
   if (email === EMAIL_DONO.toLowerCase()) {
-    return { departamentos: [], veTudo: true, admin: true, cadastrado: true, dono: true };
+    return { departamentos: [], veTudo: true, admin: true, supervisor: false, cadastrado: true, dono: true };
   }
 
   try {
@@ -163,12 +163,16 @@ export async function carregarPermissao(email) {
     const dados = snap.data();
     const deps = Array.isArray(dados.departamentos) ? dados.departamentos.filter(Boolean) : [];
     const admin = dados.admin === true;
+    const supervisor = dados.supervisor === true;
     return {
       departamentos: deps,
       // Administrador enxerga o quadro inteiro, mesmo com departamentos
       // marcados no cadastro: quem administra precisa da visao completa.
+      // Supervisor NAO ve tudo - fica restrito aos departamentos dele (so que
+      // com poder total dentro deles).
       veTudo: admin || deps.length === 0,
       admin,
+      supervisor,
       cadastrado: true
     };
   } catch (e) {
@@ -261,6 +265,7 @@ export function protegerPagina({ exigirAdmin = false } = {}) {
           departamentos: deps,
           veTudo: !!SIMULAR_USUARIO.admin || deps.length === 0,
           admin: !!SIMULAR_USUARIO.admin,
+          supervisor: !!SIMULAR_USUARIO.supervisor,
           cadastrado: true,
           simulado: true
         };
@@ -293,8 +298,11 @@ function escapeHtml(str) {
 // e admin fica apenas com Relatorio e Auditoria no submenu - some o link dele.
 // Chamar nas paginas que tem o submenu (admin/relatorio/auditoria) apos o login.
 export function ajustarSubmenu(permissao) {
+  // Admin e supervisor podem abrir a Configuracao; os demais so veem Relatorio
+  // e Auditoria no submenu.
+  const podeConfig = !!(permissao && (permissao.admin || permissao.supervisor));
   const link = document.getElementById("linkConfig");
-  if (link && !(permissao && permissao.admin)) link.style.display = "none";
+  if (link && !podeConfig) link.style.display = "none";
 }
 
 export function montarBarraUsuario(container, { user, email, permissao }) {
@@ -307,9 +315,11 @@ export function montarBarraUsuario(container, { user, email, permissao }) {
 
   const alcance = permissao.admin
     ? "administrador — acesso total"
-    : permissao.veTudo
-      ? "vê todos os departamentos"
-      : `vê: ${escapeHtml(permissao.departamentos.join(", "))}`;
+    : permissao.supervisor
+      ? `supervisor — ${escapeHtml(permissao.departamentos.join(", ")) || "sem departamento"}`
+      : permissao.veTudo
+        ? "vê todos os departamentos"
+        : `vê: ${escapeHtml(permissao.departamentos.join(", "))}`;
 
   box.innerHTML = `
     ${foto}
