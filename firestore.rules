@@ -123,6 +123,36 @@ service cloud.firestore {
           || supervisionaDepto(resource.data.departamento);
       }
 
+      // Tarefa sem responsavel definido.
+      function semResponsavel() {
+        return !('responsavelEmail' in resource.data)
+          || resource.data.responsavelEmail == '';
+      }
+
+      // Usuario comum "pega" para si uma tarefa SEM responsavel do departamento
+      // dele - so pode se colocar (nunca outra pessoa).
+      function pegarParaMim() {
+        return temCadastro()
+          && resource.data.departamento in meusDeps()
+          && semResponsavel()
+          && request.resource.data.responsavelEmail == meuEmail();
+      }
+
+      // Quem pode colocar OUTRA pessoa como responsavel: so admin e o supervisor
+      // do departamento. Os demais so deixam sem responsavel, se colocam, ou
+      // mantem o responsavel que ja estava.
+      function naoAtribuiAOutro() {
+        let novo = ('responsavelEmail' in request.resource.data)
+          ? request.resource.data.responsavelEmail : '';
+        let antigo = (resource != null && 'responsavelEmail' in resource.data)
+          ? resource.data.responsavelEmail : '';
+        return novo == antigo
+          || novo == ''
+          || novo == meuEmail()
+          || souAdmin()
+          || supervisionaDepto(request.resource.data.departamento);
+      }
+
       // Validacao de tamanho/tipo dos campos, para barrar documentos gigantes
       // (abuso de custo) e lixo. request.resource.data e o doc apos a escrita,
       // entao vale para create e update. Campos opcionais so sao checados se
@@ -146,19 +176,27 @@ service cloud.firestore {
       //                              de outras pessoas do grupo).
       // A consulta do cliente precisa refletir isso: o usuario comum consulta
       // por departamento E responsavelEmail == o proprio e-mail.
+      // Usuario comum ve, alem das proprias, as tarefas SEM responsavel do
+      // departamento dele (o "pool" que qualquer um pode pegar).
       allow read: if modoAberto() || souDono()
         || (doDominio() && (
               veTudoCards()
               || supervisionaDepto(resource.data.departamento)
-              || (resource.data.departamento in meusDeps() && responsavelDaTarefa())
+              || (resource.data.departamento in meusDeps()
+                  && (responsavelDaTarefa() || semResponsavel()))
            ));
 
-      // Criar: pessoa do dominio, respeitando o schema.
-      allow create: if modoAberto() || souDono() || (doDominio() && cardValido());
+      // Criar: pessoa do dominio, respeitando o schema. Usuario comum nao pode
+      // ja criar atribuindo a OUTRA pessoa (so a si mesmo ou sem responsavel).
+      allow create: if modoAberto() || souDono()
+        || (doDominio() && cardValido() && naoAtribuiAOutro());
 
-      // Alterar e excluir: dono, responsavel, admin - ou tarefa sem dono.
-      // Alterar tambem valida o schema; excluir nao tem corpo para validar.
-      allow update: if modoAberto() || souDono() || (doDominio() && podeMexer() && cardValido());
+      // Alterar: quem pode mexer (dono/responsavel/admin/supervisor/sem-dono) OU
+      // o usuario comum pegando para si uma tarefa sem responsavel. Em todos os
+      // casos, so admin/supervisor podem apontar OUTRA pessoa como responsavel.
+      allow update: if modoAberto() || souDono()
+        || (doDominio() && cardValido() && naoAtribuiAOutro()
+            && (podeMexer() || pegarParaMim()));
       allow delete: if modoAberto() || souDono() || (doDominio() && podeMexer());
     }
 

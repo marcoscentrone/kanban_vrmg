@@ -106,7 +106,7 @@ function escutarCards() {
   const consulta = soVeProprias()
     ? query(collection(db, COLECAO_CARDS),
         where("departamento", "==", dep),
-        where("responsavelEmail", "==", usuario.email))
+        where("responsavelEmail", "in", [usuario.email, ""]))
     : query(collection(db, COLECAO_CARDS), where("departamento", "==", dep));
   unsubCards = onSnapshot(
     consulta,

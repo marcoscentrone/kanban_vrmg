@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "kanban_cards",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departamento", "order": "ASCENDING" },
+        { "fieldPath": "responsavelEmail", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "kanban_auditoria",
       "queryScope": "COLLECTION",
       "fields": [

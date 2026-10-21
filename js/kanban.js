@@ -186,6 +186,13 @@ function ehSupervisorDoDepto(dep) {
   return !!dep && deps.includes(dep);
 }
 
+// Usuario comum pode "pegar para si" uma tarefa SEM responsavel do departamento
+// dele. Admin/supervisor atribuem direto pelo campo, entao nao precisam disso.
+function podePegar(card) {
+  if (!soVeProprias() || !card || card.responsavelEmail) return false;
+  return (usuario.permissao.departamentos || []).includes(card.departamento || "");
+}
+
 // E-mail do responsavel, a partir do nome escolhido (so cadastrados tem e-mail).
 // Gravado no card alem do nome, para o Firestore conseguir checar permissao -
 // no servidor so existe o e-mail do token, nunca o "nome".
@@ -358,7 +365,7 @@ function escutarQuadro() {
   const consulta = soVeProprias()
     ? query(cardsRef,
         where("departamento", "==", filtroDepartamento),
-        where("responsavelEmail", "==", usuario.email))
+        where("responsavelEmail", "in", [usuario.email, ""]))
     : query(cardsRef, where("departamento", "==", filtroDepartamento));
 
   unsubCards = onSnapshot(
@@ -968,10 +975,11 @@ function preencherSelectResponsavel() {
   if (!filtroRespSel) return;
 
   if (soVeProprias()) {
-    filtroResponsavel = usuario.email;
-    filtroRespSel.innerHTML =
-      `<option value="${escapeHtml(usuario.email)}">${escapeHtml(nomeDoEmail(usuario.email))}</option>`;
-    filtroRespSel.value = usuario.email;
+    // Usuario comum: ve as proprias + as sem responsavel (o servidor ja traz
+    // exatamente isso). O seletor fica so informativo.
+    filtroResponsavel = "";
+    filtroRespSel.innerHTML = '<option value="">Minhas e sem responsável</option>';
+    filtroRespSel.value = "";
     filtroRespSel.disabled = true;
     return;
   }
@@ -1084,8 +1092,61 @@ function abrirModal(colunaId, cardId) {
     $("hintDono").textContent = "Quem cria a tarefa é o dono e pode alterá-la e excluí-la depois.";
   }
 
+  const cardAtual = cardId ? cardPorId(cardId) : null;
+  configurarResponsavelModal(cardAtual, ehEdicao);
+
   overlay.classList.add("show");
   $("fTitle").focus();
+}
+
+// Ajusta o campo Responsavel e o botao "Pegar para mim" conforme o papel:
+// o usuario comum nunca digita responsavel (nao pode atribuir a outra pessoa);
+// em tarefa existente sem responsavel, ele ganha o botao para pegar para si.
+function configurarResponsavelModal(card, ehEdicao) {
+  const campo = $("fAssignee");
+  const pegar = $("pegarBtn");
+  const comum = soVeProprias();
+
+  if (pegar) pegar.disabled = false;
+
+  if (comum) {
+    campo.disabled = true; // comum nunca digita responsavel
+    $("hintResponsavel").textContent =
+      "Você só pode pegar a tarefa para você. Supervisores e administradores atribuem a outras pessoas.";
+    $("hintResponsavel").classList.remove("erro");
+  }
+
+  const mostrarPegar = comum && ehEdicao && !!card && podePegar(card);
+  if (pegar) pegar.style.display = mostrarPegar ? "inline-flex" : "none";
+}
+
+// Usuario comum pega uma tarefa sem responsavel para si (grava direto).
+async function pegarTarefaParaMim() {
+  if (!usuario || !editando.cardId) return;
+  const card = cardPorId(editando.cardId);
+  if (!card || !podePegar(card)) return;
+
+  const meuNome = nomeDoEmail(usuario.email);
+  const pegar = $("pegarBtn");
+  pegar.disabled = true;
+  try {
+    await updateDoc(doc(db, COLECAO_CARDS, editando.cardId), {
+      responsavel: meuNome,
+      responsavelEmail: usuario.email,
+      atualizadoEm: serverTimestamp()
+    });
+    registrarEdicao(
+      card,
+      { ...card, responsavel: meuNome, responsavelEmail: usuario.email },
+      quemSouEu(),
+      nomeDaLista
+    );
+    fecharModal();
+  } catch (e) {
+    console.error("[kanban] falha ao pegar tarefa:", e);
+    erroModal.textContent = "Não foi possível pegar a tarefa. Tente novamente.";
+    pegar.disabled = false;
+  }
 }
 
 // Mostra o dono pelo nome ("marcos.centrone@..." -> "Marcos Centrone").
@@ -1287,6 +1348,7 @@ async function excluirTarefa() {
 
 $("saveBtn").onclick = salvarTarefa;
 $("deleteBtn").onclick = excluirTarefa;
+$("pegarBtn").onclick = pegarTarefaParaMim;
 $("cancelBtn").onclick = fecharModal;
 
 overlay.addEventListener("click", (e) => { if (e.target === overlay) fecharModal(); });
