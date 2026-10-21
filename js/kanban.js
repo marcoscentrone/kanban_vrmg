@@ -1358,11 +1358,10 @@ $("deleteBtn").onclick = excluirTarefa;
 $("pegarBtn").onclick = pegarTarefaParaMim;
 $("cancelBtn").onclick = fecharModal;
 
-overlay.addEventListener("click", (e) => { if (e.target === overlay) fecharModal(); });
-
+// O modal so fecha pelos botoes (Cancelar / Salvar / Excluir / Pegar) - clicar
+// fora ou apertar Esc nao fecha, para nao perder o que foi digitado sem querer.
 document.addEventListener("keydown", (e) => {
   if (!overlay.classList.contains("show")) return;
-  if (e.key === "Escape") fecharModal();
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) salvarTarefa();
 });
 
