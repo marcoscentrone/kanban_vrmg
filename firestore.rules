@@ -1,32 +1,14 @@
 rules_version = '2';
 
 // ============================================================================
-// REGRAS DO FIRESTORE - Quadro de Fluxo (projeto de teste "kanbanvr")
+// REGRAS DO FIRESTORE - Quadro de Fluxo (projeto "kanbanvr")
 // ----------------------------------------------------------------------------
-// COMO USAR ESTE ARQUIVO
-//
-// Ele ja contem as regras DEFINITIVAS, mas comeca em MODO ABERTO para voce
-// conseguir configurar tudo (cadastrar o administrador e os departamentos).
-//
-//   >>> PARA FECHAR, troque UMA linha:   modoAberto() -> return false;
-//
-// Nao e preciso apagar nem reescrever nada: as regras reais ja estao aqui
-// embaixo, so ficam adormecidas enquanto o modo aberto estiver ligado.
-//
-// ATENCAO: com modoAberto() em true, qualquer pessoa com as credenciais do
-// projeto le e escreve tudo, inclusive sem estar logada. Use apenas durante a
-// configuracao inicial, com dados de teste.
+// Acesso por PAPEL e DEPARTAMENTO, sempre exigindo login do dominio da empresa.
+// Nao existe mais "modo aberto": toda leitura/escrita passa pelas regras abaixo.
 // ============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ---------------- INTERRUPTOR GERAL ----------------
-    // true  = libera tudo (configuracao inicial)
-    // false = valem as regras reais definidas abaixo
-    function modoAberto() {
-      return false;          // <<<<<< TROQUE PARA false QUANDO TERMINAR
-    }
 
     // ---------------- Auxiliares ----------------
 
@@ -178,7 +160,7 @@ service cloud.firestore {
       // por departamento E responsavelEmail == o proprio e-mail.
       // Usuario comum ve, alem das proprias, as tarefas SEM responsavel do
       // departamento dele (o "pool" que qualquer um pode pegar).
-      allow read: if modoAberto() || souDono()
+      allow read: if souDono()
         || (doDominio() && (
               veTudoCards()
               || supervisionaDepto(resource.data.departamento)
@@ -188,16 +170,16 @@ service cloud.firestore {
 
       // Criar: pessoa do dominio, respeitando o schema. Usuario comum nao pode
       // ja criar atribuindo a OUTRA pessoa (so a si mesmo ou sem responsavel).
-      allow create: if modoAberto() || souDono()
+      allow create: if souDono()
         || (doDominio() && cardValido() && naoAtribuiAOutro());
 
       // Alterar: quem pode mexer (dono/responsavel/admin/supervisor/sem-dono) OU
       // o usuario comum pegando para si uma tarefa sem responsavel. Em todos os
       // casos, so admin/supervisor podem apontar OUTRA pessoa como responsavel.
-      allow update: if modoAberto() || souDono()
+      allow update: if souDono()
         || (doDominio() && cardValido() && naoAtribuiAOutro()
             && (podeMexer() || pegarParaMim()));
-      allow delete: if modoAberto() || souDono() || (doDominio() && podeMexer());
+      allow delete: if souDono() || (doDominio() && podeMexer());
     }
 
     // ---------------- Departamentos ----------------
@@ -220,10 +202,10 @@ service cloud.firestore {
           && (!('subtarefasPadrao' in d) || (d.subtarefasPadrao is list && d.subtarefasPadrao.size() <= 6));
       }
 
-      allow read:   if modoAberto() || souDono() || doDominio();
-      allow create: if modoAberto() || souAdmin();
-      allow delete: if modoAberto() || souAdmin();
-      allow update: if modoAberto() || souAdmin()
+      allow read:   if souDono() || doDominio();
+      allow create: if souAdmin();
+      allow delete: if souAdmin();
+      allow update: if souAdmin()
         || (doDominio() && supervisionaEste() && soListasESubs() && listasSubsValidas());
     }
 
@@ -248,12 +230,16 @@ service cloud.firestore {
           && meusDeps().hasAll(d.departamentos);
       }
 
-      allow read:  if modoAberto() || souDono() || doDominio();
+      // Ler: so o proprio documento, admin e supervisor. Isso evita que um
+      // funcionario comum liste todos os e-mails e quem e admin/supervisor.
+      // (Usuario comum nao precisa ler a tabela - ele nao atribui responsaveis.)
+      allow read:  if souDono()
+        || (doDominio() && (souAdmin() || ehSupervisor() || email == meuEmail()));
 
       // Criar: admin (qualquer); supervisor (dentro do escopo dele); ou a
       // PROPRIA pessoa no primeiro acesso, escolhendo departamentos - nunca
       // como admin nem supervisor.
-      allow create: if modoAberto() || souAdmin()
+      allow create: if souAdmin()
         || (doDominio() && docSupervisionavel(request.resource.data))
         || (doDominio() && email == meuEmail()
             && request.resource.data.admin != true
@@ -263,12 +249,12 @@ service cloud.firestore {
 
       // Alterar: admin; ou supervisor quando o doc ANTES e DEPOIS continua no
       // escopo dele (nao pode promover a admin/supervisor nem jogar para fora).
-      allow update: if modoAberto() || souAdmin()
+      allow update: if souAdmin()
         || (doDominio() && docSupervisionavel(resource.data)
             && docSupervisionavel(request.resource.data));
 
       // Excluir: admin; ou supervisor para um membro do escopo dele.
-      allow delete: if modoAberto() || souAdmin()
+      allow delete: if souAdmin()
         || (doDominio() && docSupervisionavel(resource.data));
     }
 
@@ -284,12 +270,28 @@ service cloud.firestore {
     // de isolamento das tarefas. A consulta do cliente precisa filtrar por
     // departamento (where departamento in ...), senao o Firestore recusa.
     match /kanban_auditoria/{registroId} {
+      // Tamanho dos campos, para um registro nao virar vetor de abuso de custo.
+      function auditoriaValida() {
+        let d = request.resource.data;
+        return (!('tarefaId' in d) || (d.tarefaId is string && d.tarefaId.size() <= 200))
+          && (!('tarefaTitulo' in d) || (d.tarefaTitulo is string && d.tarefaTitulo.size() <= 200))
+          && (!('departamento' in d) || (d.departamento is string && d.departamento.size() <= 60))
+          && (!('responsavelEmail' in d) || (d.responsavelEmail is string && d.responsavelEmail.size() <= 120))
+          && (!('acao' in d) || (d.acao is string && d.acao.size() <= 40))
+          && (!('alvo' in d) || (d.alvo is string && d.alvo.size() <= 40))
+          && (!('campo' in d) || (d.campo is string && d.campo.size() <= 60))
+          && (!('de' in d) || (d.de is string && d.de.size() <= 2100))
+          && (!('para' in d) || (d.para is string && d.para.size() <= 2100))
+          && (!('porNome' in d) || (d.porNome is string && d.porNome.size() <= 100))
+          && (!('porEmail' in d) || (d.porEmail is string && d.porEmail.size() <= 120));
+      }
+
       // Mesma visibilidade das tarefas:
       //   . admin / ve-tudo -> toda a trilha
       //   . supervisor      -> a trilha do(s) departamento(s) dele
       //   . usuario comum   -> so a trilha das tarefas em que ele e o responsavel
       // A consulta do cliente precisa refletir isso (ver auditoria-tela.js).
-      allow read:   if modoAberto() || souDono()
+      allow read:   if souDono()
         || (doDominio() && (
               veTudoCards()
               || supervisionaDepto(resource.data.departamento)
@@ -297,13 +299,11 @@ service cloud.firestore {
                   && resource.data.responsavelEmail == meuEmail())
            ));
 
-      // create exige que o campo porEmail seja o PROPRIO e-mail de quem grava.
-      // Sem isso, qualquer logado forjava registros em nome de outra pessoa -
-      // uma trilha com autoria falsificavel nao serve como trilha.
-      allow create: if modoAberto() || (
-        doDominio()
+      // create exige que porEmail seja o PROPRIO e-mail de quem grava (autoria
+      // nao falsificavel) e valida tamanhos para barrar abuso de custo.
+      allow create: if doDominio()
         && request.resource.data.porEmail == request.auth.token.email.lower()
-      );
+        && auditoriaValida();
 
       allow update, delete: if false;
     }
