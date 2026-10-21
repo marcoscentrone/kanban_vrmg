@@ -38,6 +38,8 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
+  query,
+  where,
   serverTimestamp,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
@@ -75,6 +77,8 @@ let cards = [];                                  // [{id, titulo, coluna, ...}]
 let editando = { colunaId: null, cardId: null }; // alvo do modal
 let arrastando = null;                           // id do card em drag
 let filtroDepartamento = "";   // departamento de trabalho (sempre um)
+let unsubCards = null;          // cancela a assinatura dos cards do depto atual
+let departamentoAssinado = null;
 let usuario = null;   // { user, email, permissao } - preenchido no boot
 
 // Identificacao usada nos registros de auditoria.
@@ -293,6 +297,20 @@ let t0Conexao = 0;
 let primeiroSnapshotServidor = false;
 
 function escutarQuadro() {
+  // (Re)assina os cards SO do departamento atual. A regra do Firestore so
+  // libera a leitura quando a query pede um departamento permitido - entao
+  // nao da mais para assinar a colecao inteira. Trocar de departamento
+  // cancela a assinatura anterior e abre outra.
+  if (unsubCards) { unsubCards(); unsubCards = null; }
+  departamentoAssinado = filtroDepartamento;
+  primeiroSnapshotServidor = false;
+
+  if (!filtroDepartamento) {
+    cards = [];
+    render();
+    return;
+  }
+
   setStatus("Carregando quadro…");
   setLive(false, "conectando…");
   t0Conexao = performance.now();
@@ -312,8 +330,8 @@ function escutarQuadro() {
 
   // Sem orderBy no servidor de proposito: a ordenacao e feita no cliente por
   // urgencia (prazo de termino). Assim nao e preciso indice composto no Firestore
-  onSnapshot(
-    cardsRef,
+  unsubCards = onSnapshot(
+    query(cardsRef, where("departamento", "==", filtroDepartamento)),
     // includeMetadataChanges: sem isto, quando os dados do servidor sao iguais
     // aos do cache o callback nao dispara de novo - e o indicador ficaria preso
     // em "sem conexao" mesmo com o quadro ja sincronizado.
@@ -437,6 +455,12 @@ function responsavelValido(nome, nomeOriginal = "") {
   return PESSOAS.some((p) => p.nome.toLowerCase() === v);
 }
 
+// Re-assina os cards so quando o departamento de trabalho muda (evita
+// reabrir a assinatura a cada snapshot de departamento).
+function reassinarCardsSeMudou() {
+  if (filtroDepartamento !== departamentoAssinado) escutarQuadro();
+}
+
 function escutarDepartamentos() {
   onSnapshot(
     collection(db, COLECAO_DEPARTAMENTOS),
@@ -458,6 +482,7 @@ function escutarDepartamentos() {
       if (DEPARTAMENTOS.includes(modalAtual)) $("fDepartamento").value = modalAtual;
 
       lembrarDepartamento();
+      reassinarCardsSeMudou();
       render();
     },
     (erro) => {
@@ -1201,6 +1226,7 @@ filtroSel.addEventListener("change", () => {
   filtroDepartamento = filtroSel.value;
   aplicarFluxoDoDepartamento();
   lembrarDepartamento();
+  escutarQuadro();   // re-assina os cards do novo departamento
   render();
 });
 

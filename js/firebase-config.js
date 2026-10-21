@@ -93,6 +93,20 @@ export const auth = getAuth(app);
 // mudar la tambem.
 export const EMAIL_DONO = "marcos.centrone@vrbelohorizonte.com.br";
 
+// DEV / TESTE LOCAL: finge que voce e outro usuario, SO NA INTERFACE.
+// Voce continua logado como voce (o Firestore usa o SEU token real), mas o
+// quadro passa a se comportar como esse usuario - util para ver o acesso
+// restrito por departamento sem ter uma segunda conta.
+// NAO testa o bloqueio do SERVIDOR (para isso, use o Rules Playground).
+// >>> Deixe null em producao. <<<
+// Exemplo:
+//   export const SIMULAR_USUARIO = {
+//     email: "teste@vrbelohorizonte.com.br",
+//     admin: false,
+//     departamentos: ["COMERCIAL"]   // [] = ve todos
+//   };
+export const SIMULAR_USUARIO = null;
+
 // Trava 1 - dominio. Lista VAZIA aceita qualquer conta Google (modo teste).
 // Preenchida, so entram e-mails terminados nestes dominios.
 export const DOMINIOS_PERMITIDOS = [

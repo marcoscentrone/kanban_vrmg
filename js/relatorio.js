@@ -20,7 +20,7 @@ import {
   coresDasSubtarefas, diasAteOFim
 } from "./cronograma.js";
 import {
-  collection, onSnapshot
+  collection, onSnapshot, query, where
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 /* -------------------------------------------------------------------------- */
@@ -31,6 +31,8 @@ let usuario = null;
 let cards = [];
 let departamentos = [];      // [{id, nome, colunas}]
 let conectado = false;
+let unsubCards = null;
+let depAssinado = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -77,10 +79,27 @@ function escutar() {
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
     montarFiltroDepartamento();
+    if ($("filtroDep").value !== depAssinado) escutarCards();
     render();
   }, erroDe("departamentos"));
 
-  onSnapshot(collection(db, COLECAO_CARDS), opcoes, (snap) => {
+  // os cards sao assinados por departamento em escutarCards()
+}
+
+// Assina (ou re-assina) os cards SO do departamento escolhido. A regra do
+// Firestore so libera a leitura quando a query pede um departamento permitido.
+function escutarCards() {
+  const dep = $("filtroDep").value;
+  if (unsubCards) { unsubCards(); unsubCards = null; }
+  depAssinado = dep;
+
+  if (!dep) { cards = []; render(); return; }
+
+  const opcoes = { includeMetadataChanges: true };
+  unsubCards = onSnapshot(
+    query(collection(db, COLECAO_CARDS), where("departamento", "==", dep)),
+    opcoes,
+    (snap) => {
     cards = snap.docs.map((d) => {
       const dados = d.data({ serverTimestamps: "estimate" });
       return {
@@ -394,6 +413,7 @@ function exportarCsv() {
 
 $("filtroDep").addEventListener("change", () => {
   montarFiltroLista();
+  escutarCards();   // re-assina os cards do novo departamento
   montarFiltroResponsavel();
   render();
 });

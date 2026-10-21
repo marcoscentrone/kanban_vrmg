@@ -1,6 +1,9 @@
 # Configuração local do Claude Code / plugins (ECC) — específica da máquina
 .claude/
 
+# Cache local de deploy do Firebase CLI
+.firebase/
+
 # Temporários do sistema
 Thumbs.db
 desktop.ini

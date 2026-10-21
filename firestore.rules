@@ -62,6 +62,24 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/kanban_acessos/$(meuEmail())).data.admin == true);
     }
 
+    // ---- Visibilidade por departamento (mesma logica do carregarPermissao) ----
+
+    function temCadastro() {
+      return exists(/databases/$(database)/documents/kanban_acessos/$(meuEmail()));
+    }
+
+    // Departamentos que a pessoa acompanha. So chamar depois de confirmar que
+    // temCadastro() e true, senao o get() falha.
+    function meusDeps() {
+      return get(/databases/$(database)/documents/kanban_acessos/$(meuEmail())).data.departamentos;
+    }
+
+    // Ve o quadro inteiro: admin, OU nao cadastrado, OU cadastrado sem nenhum
+    // departamento marcado (igual ao "veTudo" do cliente).
+    function veTudoCards() {
+      return souAdmin() || !temCadastro() || meusDeps().size() == 0;
+    }
+
     // ---------------- Tarefas ----------------
     match /kanban_cards/{cardId} {
 
@@ -90,12 +108,32 @@ service cloud.firestore {
         return souAdmin() || donoDaTarefa() || responsavelDaTarefa() || semDonoReal();
       }
 
-      // Ler e criar: qualquer pessoa do dominio.
-      allow read:   if modoAberto() || souDono() || doDominio();
-      allow create: if modoAberto() || souDono() || doDominio();
+      // Validacao de tamanho/tipo dos campos, para barrar documentos gigantes
+      // (abuso de custo) e lixo. request.resource.data e o doc apos a escrita,
+      // entao vale para create e update. Campos opcionais so sao checados se
+      // presentes, para nao travar updates parciais (mover, mudar etapa...).
+      function cardValido() {
+        let d = request.resource.data;
+        return d.titulo is string && d.titulo.size() >= 1 && d.titulo.size() <= 200
+          && (!('descricao' in d) || (d.descricao is string && d.descricao.size() <= 2000))
+          && (!('departamento' in d) || (d.departamento is string && d.departamento.size() <= 60))
+          && (!('responsavel' in d) || (d.responsavel is string && d.responsavel.size() <= 60))
+          && (!('coluna' in d) || (d.coluna is string && d.coluna.size() <= 60))
+          && (!('subtarefas' in d) || (d.subtarefas is list && d.subtarefas.size() <= 6))
+          && (!('prioridade' in d) || d.prioridade in ['baixa', 'media', 'alta']);
+      }
 
-      // Alterar e excluir: so dono, responsavel, admin - ou tarefa sem dono.
-      allow update, delete: if modoAberto() || souDono() || (doDominio() && podeMexer());
+      // Ler: so quem ve o departamento da tarefa (admin/veTudo veem todos).
+      allow read: if modoAberto() || souDono()
+        || (doDominio() && (veTudoCards() || resource.data.departamento in meusDeps()));
+
+      // Criar: pessoa do dominio, respeitando o schema.
+      allow create: if modoAberto() || souDono() || (doDominio() && cardValido());
+
+      // Alterar e excluir: dono, responsavel, admin - ou tarefa sem dono.
+      // Alterar tambem valida o schema; excluir nao tem corpo para validar.
+      allow update: if modoAberto() || souDono() || (doDominio() && podeMexer() && cardValido());
+      allow delete: if modoAberto() || souDono() || (doDominio() && podeMexer());
     }
 
     // ---------------- Departamentos ----------------

@@ -22,7 +22,7 @@
 
 import {
   auth, db, COLECAO_ACESSOS,
-  DOMINIOS_PERMITIDOS, EMAILS_LIBERADOS, EXIGIR_CADASTRO, EMAIL_DONO
+  DOMINIOS_PERMITIDOS, EMAILS_LIBERADOS, EXIGIR_CADASTRO, EMAIL_DONO, SIMULAR_USUARIO
 } from "./firebase-config.js";
 import {
   GoogleAuthProvider,
@@ -252,7 +252,23 @@ export function protegerPagina({ exigirAdmin = false } = {}) {
       if (tela) { tela.remove(); tela = null; }
       document.body.classList.remove("nao-logado");
 
-      resolve({ user, email, permissao });
+      // DEV: troca email/permissao SO na interface (ver SIMULAR_USUARIO).
+      let emailFinal = email, permissaoFinal = permissao;
+      if (SIMULAR_USUARIO) {
+        emailFinal = (SIMULAR_USUARIO.email || email).toLowerCase();
+        const deps = SIMULAR_USUARIO.departamentos || [];
+        permissaoFinal = {
+          departamentos: deps,
+          veTudo: !!SIMULAR_USUARIO.admin || deps.length === 0,
+          admin: !!SIMULAR_USUARIO.admin,
+          cadastrado: true,
+          simulado: true
+        };
+        console.warn("[auth] SIMULANDO usuario:", emailFinal, permissaoFinal,
+          "— só afeta a INTERFACE; o servidor usa seu token real.");
+      }
+
+      resolve({ user, email: emailFinal, permissao: permissaoFinal });
     });
   });
 }
