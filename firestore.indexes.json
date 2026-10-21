@@ -7,6 +7,14 @@
         { "fieldPath": "departamento", "order": "ASCENDING" },
         { "fieldPath": "em", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "kanban_auditoria",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "responsavelEmail", "order": "ASCENDING" },
+        { "fieldPath": "em", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

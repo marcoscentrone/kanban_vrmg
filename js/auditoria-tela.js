@@ -69,12 +69,20 @@ function escutar() {
   // (where departamento in ...), espelhando a regra do Firestore; admin e quem
   // ve tudo leem a colecao inteira. O 'in' aceita ate 30 valores.
   const ref = collection(db, COLECAO_AUDITORIA);
-  const meusDeps = usuario && !usuario.permissao.veTudo
-    ? (usuario.permissao.departamentos || []).slice(0, 30)
-    : null;
-  const consulta = (meusDeps && meusDeps.length)
-    ? query(ref, where("departamento", "in", meusDeps), orderBy("em", "desc"), limit(LIMITE))
-    : query(ref, orderBy("em", "desc"), limit(LIMITE));
+  let consulta;
+  if (!usuario || usuario.permissao.veTudo) {
+    // Admin / quem ve tudo: a trilha inteira.
+    consulta = query(ref, orderBy("em", "desc"), limit(LIMITE));
+  } else if (usuario.permissao.supervisor) {
+    // Supervisor: a trilha do(s) departamento(s) que ele supervisiona.
+    const deps = (usuario.permissao.departamentos || []).slice(0, 30);
+    consulta = deps.length
+      ? query(ref, where("departamento", "in", deps), orderBy("em", "desc"), limit(LIMITE))
+      : query(ref, orderBy("em", "desc"), limit(LIMITE));
+  } else {
+    // Usuario comum: so a trilha das tarefas em que ele e o responsavel.
+    consulta = query(ref, where("responsavelEmail", "==", usuario.email), orderBy("em", "desc"), limit(LIMITE));
+  }
 
   onSnapshot(consulta, opcoes, (snap) => {
     registros = snap.docs.map((d) => {
@@ -165,8 +173,14 @@ function filtrados() {
   const de = $("filtroDe").value;
   const ate = $("filtroAte").value;
 
-  // Quem nao e administrador so ve a trilha dos departamentos que acompanha.
-  const permitidos = usuario && usuario.permissao.veTudo ? null : (usuario ? usuario.permissao.departamentos : []);
+  // Filtro de seguranca no cliente, espelhando o servidor:
+  //   . ve-tudo ou usuario comum -> null (o servidor ja restringiu a consulta)
+  //   . supervisor               -> so os departamentos que ele supervisiona
+  const soProprias = usuario && !usuario.permissao.admin
+    && !usuario.permissao.supervisor && !usuario.permissao.veTudo;
+  const permitidos = (!usuario || usuario.permissao.veTudo || soProprias)
+    ? null
+    : usuario.permissao.departamentos;
 
   return registros.filter((r) => {
     if (permitidos && r.departamento && !permitidos.includes(r.departamento)) return false;

@@ -72,6 +72,9 @@ function base(card, usuario) {
     tarefaId: card.id || "",
     tarefaTitulo: card.titulo || "",
     departamento: card.departamento || "",
+    // E-mail do responsavel da tarefa: usado para o usuario comum so enxergar a
+    // trilha das tarefas dele (mesma regra do quadro e do relatorio).
+    responsavelEmail: (card.responsavelEmail || "").toLowerCase(),
     ...usuarioAtual(usuario)
   };
 }

@@ -246,8 +246,18 @@ service cloud.firestore {
     // de isolamento das tarefas. A consulta do cliente precisa filtrar por
     // departamento (where departamento in ...), senao o Firestore recusa.
     match /kanban_auditoria/{registroId} {
+      // Mesma visibilidade das tarefas:
+      //   . admin / ve-tudo -> toda a trilha
+      //   . supervisor      -> a trilha do(s) departamento(s) dele
+      //   . usuario comum   -> so a trilha das tarefas em que ele e o responsavel
+      // A consulta do cliente precisa refletir isso (ver auditoria-tela.js).
       allow read:   if modoAberto() || souDono()
-        || (doDominio() && (veTudoCards() || resource.data.departamento in meusDeps()));
+        || (doDominio() && (
+              veTudoCards()
+              || supervisionaDepto(resource.data.departamento)
+              || ('responsavelEmail' in resource.data
+                  && resource.data.responsavelEmail == meuEmail())
+           ));
 
       // create exige que o campo porEmail seja o PROPRIO e-mail de quem grava.
       // Sem isso, qualquer logado forjava registros em nome de outra pessoa -
