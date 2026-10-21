@@ -665,6 +665,20 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
 }
 .sub-remover:hover{background:var(--danger); color:var(--vr-white);}
 
+.sub-mover{
+  flex-shrink:0;
+  width:22px; height:22px;
+  border:1.5px solid var(--vr-gray-light);
+  background:var(--vr-white);
+  color:var(--vr-text);
+  font-size:12px;
+  line-height:1;
+  border-radius:4px;
+  cursor:pointer;
+}
+.sub-mover:hover:not(:disabled){border-color:var(--vr-orange); color:var(--vr-orange);}
+.sub-mover:disabled{opacity:0.35; cursor:default;}
+
 #addSubBox{display:flex; gap:6px;}
 #addSubBox input{
   flex:1 1 auto;

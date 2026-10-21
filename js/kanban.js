@@ -1040,7 +1040,7 @@ function aplicarFluxoDoDepartamento() {
 function setModalSomenteLeitura(ro) {
   const modal = overlay.querySelector(".modal");
   modal.querySelectorAll("input, textarea, select").forEach((el) => { el.disabled = ro; });
-  modal.querySelectorAll(".sub-estado, .sub-remover").forEach((b) => { b.disabled = ro; });
+  modal.querySelectorAll(".sub-estado, .sub-remover, .sub-mover").forEach((b) => { b.disabled = ro; });
   $("saveBtn").style.display = ro ? "none" : "";
   const addBox = $("addSubBox");
   if (addBox) addBox.style.display = ro ? "none" : "";
@@ -1216,6 +1216,8 @@ function renderSubsModal() {
       <button type="button" class="sub-estado" title="${info.rotulo}">${info.icone}</button>
       <span class="sub-num">1-${i + 1}</span>
       <input class="sub-input" maxlength="40" value="${escapeHtml(sub.nome)}">
+      <button type="button" class="sub-mover" data-dir="-1" title="Subir" ${i === 0 ? "disabled" : ""}>&#8593;</button>
+      <button type="button" class="sub-mover" data-dir="1" title="Descer" ${i === subsRascunho.length - 1 ? "disabled" : ""}>&#8595;</button>
       <button type="button" class="sub-remover" title="Remover">&times;</button>
     `;
     linha.querySelector(".sub-estado").onclick = () => {
@@ -1225,12 +1227,26 @@ function renderSubsModal() {
     linha.querySelector(".sub-input").oninput = (e) => {
       subsRascunho[i].nome = e.target.value;
     };
+    linha.querySelectorAll(".sub-mover").forEach((b) => {
+      b.onclick = () => moverSubRascunho(i, Number(b.dataset.dir));
+    });
     linha.querySelector(".sub-remover").onclick = () => {
       subsRascunho.splice(i, 1);
       renderSubsModal();
     };
     box.appendChild(linha);
   });
+}
+
+// Troca a etapa de posicao (subir/descer). Mesma permissao de editar a tarefa:
+// quando o modal esta em leitura, os botoes ja ficam desabilitados.
+function moverSubRascunho(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= subsRascunho.length) return;
+  const tmp = subsRascunho[i];
+  subsRascunho[i] = subsRascunho[j];
+  subsRascunho[j] = tmp;
+  renderSubsModal();
 }
 
 function adicionarSubRascunho() {
