@@ -19,7 +19,7 @@
 import {
   db, COLECAO_CARDS, COLECAO_DEPARTAMENTOS, COLECAO_ACESSOS, ADMIN_ABERTO
 } from "./firebase-config.js";
-import { protegerPagina, montarBarraUsuario, existeAlgumAdmin, ajustarSubmenu } from "./auth.js";
+import { protegerPagina, montarBarraUsuario, ajustarSubmenu } from "./auth.js";
 import {
   MAX_COLUNAS, COLUNAS_PADRAO, lerColunas, colunasDe, gerarIdColuna
 } from "./colunas.js";
@@ -974,14 +974,13 @@ async function excluirAcesso(ac) {
 // Excecao de primeiro acesso: se NENHUM administrador existir ainda, o primeiro
 // usuario autenticado consegue entrar e se cadastrar - senao o cadastro nasceria
 // trancado, sem ninguem capaz de abrir.
-protegerPagina({ exigirAdmin: false }).then(async (logado) => {
+protegerPagina({ exigirAdmin: false }).then((logado) => {
   const ehSupervisor = logado.permissao.supervisor === true;
-  const temAdmin = ADMIN_ABERTO ? false : await existeAlgumAdmin();
-  // "erro" = nem deu para consultar (regras do Firestore). Deixa entrar para
-  // que a propria tela mostre o erro real de leitura, em vez de um "sem
-  // permissao" enganoso.
-  // Supervisor entra numa versao limitada (so listas/subtarefas dos deps dele).
-  const podeEntrar = logado.permissao.admin || ehSupervisor || temAdmin !== true;
+  // So admin e supervisor abrem a configuracao. Em modo aberto (setup inicial),
+  // qualquer logado entra para cadastrar o primeiro administrador. O dono entra
+  // sempre (e admin pela regra), entao nunca se fica sem quem configure.
+  // Supervisor entra numa versao limitada (listas/subtarefas e acessos dos deps dele).
+  const podeEntrar = logado.permissao.admin || ehSupervisor || ADMIN_ABERTO;
 
   if (!podeEntrar) {
     document.body.innerHTML =

@@ -124,7 +124,9 @@ export const EMAILS_LIBERADOS = [
 // e a pagina admin.html abre sem exigir a flag de administrador.
 //
 // >>> TROQUE PARA false assim que o primeiro administrador estiver cadastrado.
-export const ADMIN_ABERTO = true;
+// Desligado: admins/supervisores ja cadastrados. A area administrativa agora so
+// abre para admin e supervisor (o dono entra sempre, pois e admin pela regra).
+export const ADMIN_ABERTO = false;
 
 // Trava 2 - cadastro. Com true, so entra quem tem documento em kanban_acessos.
 // Com false, quem nao esta cadastrado entra e ve todos os departamentos.

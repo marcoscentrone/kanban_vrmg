@@ -15,7 +15,7 @@
 import {
   db, COLECAO_CARDS, COLECAO_DEPARTAMENTOS, COLECAO_ACESSOS, AMBIENTE, ADMIN_ABERTO
 } from "./firebase-config.js";
-import { protegerPagina, montarBarraUsuario, existeAlgumAdmin } from "./auth.js";
+import { protegerPagina, montarBarraUsuario } from "./auth.js";
 import { COLUNAS_PADRAO, lerColunas, colunasDe } from "./colunas.js";
 import {
   registrarCriacao, registrarExclusao, registrarEdicao,
@@ -1246,49 +1246,26 @@ setInterval(render, 60 * 60 * 1000);
 // O atalho para a area administrativa aparece para quem e administrador e
 // tambem enquanto NENHUM administrador existir - senao o primeiro acesso nao
 // teria por onde entrar para se cadastrar.
-async function mostrarAtalhoAdmin(logado) {
+function mostrarAtalhoAdmin(logado) {
   const link = $("linkAdmin");
   if (!link) return;
 
-  // Admin e supervisor entram na Configuracao (o supervisor numa versao
-  // limitada: so as listas/subtarefas do departamento dele).
-  if (logado.permissao.admin || logado.permissao.supervisor) {
+  // Admin e supervisor abrem a Configuracao (o supervisor numa versao limitada).
+  // Em modo aberto (setup inicial), qualquer logado abre, para cadastrar o
+  // primeiro administrador. O dono entra sempre, pois e admin pela regra.
+  const abreConfig = logado.permissao.admin || logado.permissao.supervisor || ADMIN_ABERTO;
+
+  if (abreConfig) {
     link.style.display = "inline-flex";
+    if (ADMIN_ABERTO && !logado.permissao.admin && !logado.permissao.supervisor) {
+      link.classList.add("primeiro-acesso");
+      link.title = "Área administrativa (modo aberto — cadastre o primeiro administrador)";
+    }
     return;
   }
 
-  // Modo aberto: todo mundo ve o atalho, para que o primeiro administrador
-  // possa ser cadastrado. Desligar em firebase-config.js depois disso.
-  if (ADMIN_ABERTO) {
-    link.style.display = "inline-flex";
-    link.classList.add("primeiro-acesso");
-    link.title = "Área administrativa (modo aberto — cadastre o primeiro administrador)";
-    return;
-  }
-
-  const temAdmin = await existeAlgumAdmin();
-
-  if (temAdmin === "erro") {
-    // Nao deu nem para consultar: quase sempre as regras do Firestore ainda nao
-    // liberam kanban_acessos. Melhor dizer isso do que sumir com o botao.
-    setStatus(
-      "Configurações indisponíveis: o Firestore recusou a leitura de " +
-        "kanban_acessos. Publique o conteúdo de firestore.rules no console.",
-      true
-    );
-    return;
-  }
-
-  if (temAdmin === false) {
-    link.style.display = "inline-flex";
-    link.classList.add("primeiro-acesso");
-    link.title = "Nenhum administrador cadastrado — clique para configurar";
-    return;
-  }
-
-  // Ja existe administrador e este usuario nao e um: ele ainda pode ver Relatorio
-  // e Auditoria. O atalho passa a levar ao Relatorio (a aba Configuracao fica
-  // oculta la dentro para quem nao e admin).
+  // Usuario comum: o atalho leva direto ao Relatorio (so Relatorio e Auditoria,
+  // a aba Configuracao fica oculta la dentro).
   link.href = "relatorio.html";
   link.title = "Relatórios e auditoria";
   link.setAttribute("aria-label", "Relatórios e auditoria");
