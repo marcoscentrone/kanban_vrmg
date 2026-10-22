@@ -329,6 +329,13 @@ async function restaurarCard(card) {
   if (!confirm(`Restaurar "${card.titulo}" para o quadro?`)) return;
 
   const colArquivo = card.situacao === "finalizada" ? COLECAO_FINALIZADOS : COLECAO_CANCELADOS;
+
+  // Recarimba a entrada na ultima coluna: se a tarefa volta para la, a data
+  // "no quadro final desde" passa a ser a desta nova passagem; senao, fica vazia.
+  const dep = depAtual();
+  const idFinal = dep ? colunasDe(dep).slice(-1)[0].id : "";
+  const finalizadoEmNovo = card.coluna === idFinal ? serverTimestamp() : null;
+
   try {
     const lote = writeBatch(db);
     lote.set(doc(db, COLECAO_CARDS, card.id), {
@@ -341,7 +348,7 @@ async function restaurarCard(card) {
       prioridade: card.prioridade || "media",
       inicioPrevisto: card.inicioPrevisto || "",
       fimPrevisto: card.fimPrevisto || "",
-      finalizadoEm: card.finalizadoEm || null,
+      finalizadoEm: finalizadoEmNovo,
       criadoPor: card.criadoPor || "",
       criadoEm: card.criadoEm || null,
       subtarefas: card.subtarefas || [],
