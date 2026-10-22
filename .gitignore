@@ -4,6 +4,11 @@
 # Cache local de deploy do Firebase CLI
 .firebase/
 
+# Logs de debug do Firebase CLI
+firebase-debug.log
+*-debug.log
+firebase-debug.*.log
+
 # Temporários do sistema
 Thumbs.db
 desktop.ini
