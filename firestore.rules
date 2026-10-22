@@ -170,7 +170,7 @@ service cloud.firestore {
           && (!('departamento' in d) || (d.departamento is string && d.departamento.size() <= 60))
           && (!('responsavel' in d) || (d.responsavel is string && d.responsavel.size() <= 60))
           && (!('coluna' in d) || (d.coluna is string && d.coluna.size() <= 60))
-          && (!('subtarefas' in d) || (d.subtarefas is list && d.subtarefas.size() <= 6))
+          && (!('subtarefas' in d) || (d.subtarefas is list && d.subtarefas.size() <= 10))
           && (!('prioridade' in d) || d.prioridade in ['baixa', 'media', 'alta']);
       }
 
@@ -223,7 +223,7 @@ service cloud.firestore {
       function listasSubsValidas() {
         let d = request.resource.data;
         return (!('colunas' in d) || (d.colunas is list && d.colunas.size() <= 6))
-          && (!('subtarefasPadrao' in d) || (d.subtarefasPadrao is list && d.subtarefasPadrao.size() <= 6));
+          && (!('subtarefasPadrao' in d) || (d.subtarefasPadrao is list && d.subtarefasPadrao.size() <= 10));
       }
 
       allow read:   if souDono() || doDominio();

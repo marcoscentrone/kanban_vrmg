@@ -706,6 +706,10 @@ function progressoPrazo(card, col) {
 // Bolinha no canto superior direito. A cor percorre o circulo HSL de 120 (verde)
 // ate 0 (vermelho), passando por 60 (amarelo) na metade do prazo.
 function renderBolinha(card, col) {
+  // Todas as etapas concluidas: bolinha verde e sem contagem de prazo.
+  if (progresso(card.subtarefas || []).completo) {
+    return `<span class="task-dot" style="background:var(--live-green)" title="Todas as etapas concluídas"></span>`;
+  }
   const p = progressoPrazo(card, col);
   if (p === null) return "";
 

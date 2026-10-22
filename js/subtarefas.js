@@ -19,7 +19,7 @@
    ja existem, senao o histórico de quem ja concluiu etapas seria reescrito.
    ========================================================================== */
 
-export const MAX_SUBTAREFAS = 6;
+export const MAX_SUBTAREFAS = 10;
 
 // Ciclo de estados de uma etapa, na ordem em que o clique avanca.
 export const ESTADOS = ["pendente", "fazendo", "feito"];

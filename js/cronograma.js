@@ -59,6 +59,11 @@ export function plural(n, singular = "dia", plural_ = "dias") {
 export function progressoPrazo(card, ehFinal = false) {
   if (ehFinal || !card.fimPrevisto) return null;
 
+  // Todas as etapas concluidas: a tarefa esta pronta, nao ha mais prazo a cobrar
+  // (a bolinha fica verde e para de contar o periodo).
+  const subs = (card && card.subtarefas) || [];
+  if (subs.length > 0 && subs.every((s) => s.estado === "feito")) return null;
+
   const hoje = new Date(hojeISO() + "T00:00:00");
   const fim = new Date(card.fimPrevisto + "T00:00:00");
   if (hoje >= fim) return 1; // venceu hoje ou ja passou

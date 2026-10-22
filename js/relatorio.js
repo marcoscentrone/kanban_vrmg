@@ -399,6 +399,7 @@ function render() {
     const janelas = janelasDasSubtarefas(card);
     const cores = coresDasSubtarefas(card, ehFinal);
     const { feitas, total } = progresso(card.subtarefas);
+    const completo = total > 0 && feitas === total;
     totalEtapas += total;
     etapasFeitas += feitas;
 
@@ -411,7 +412,7 @@ function render() {
     tr.innerHTML = `
       <td class="col-titulo">
         <div class="celula-flex">
-          <span class="bolinha" style="background:${p === null ? "var(--vr-gray)" : corDoPrazo(p)}"></span>
+          <span class="bolinha" style="background:${completo ? "var(--live-green)" : (p === null ? "var(--vr-gray)" : corDoPrazo(p))}"></span>
           <strong>${escapeHtml(card.titulo)}</strong>
           ${total ? `<span class="etapas-resumo">${feitas}/${total} etapas</span>` : ""}
           ${card.responsavel ? `<span class="resp">${escapeHtml(card.responsavel)}</span>` : ""}
