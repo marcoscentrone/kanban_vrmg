@@ -455,6 +455,9 @@ function render() {
             <span class="sub-num">1-${i + 1}</span>
             <span class="sub-nome">${escapeHtml(sub.nome)}</span>
           </div>
+          ${sub.comentario && sub.comentario.trim()
+            ? `<div class="sub-coment-rel">${escapeHtml(sub.comentario)}</div>`
+            : ""}
         </td>
         <td class="col-estado">
           <span class="estado-chip ${sub.estado}"${cor ? ` style="--cor-sub:${cor}"` : ""}>
@@ -466,14 +469,6 @@ function render() {
         <td class="col-prazo">${escapeHtml(prazo)}</td>
       `;
       corpo.appendChild(linha);
-
-      // comentario da etapa, logo abaixo dela, sem separacao
-      if (sub.comentario && sub.comentario.trim()) {
-        const linhaC = document.createElement("tr");
-        linhaC.className = "linha-sub-coment";
-        linhaC.innerHTML = `<td colspan="6" class="col-sub-coment">${escapeHtml(sub.comentario)}</td>`;
-        corpo.appendChild(linhaC);
-      }
     });
   });
 
