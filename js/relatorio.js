@@ -430,6 +430,14 @@ function render() {
     if (bR) bR.onclick = () => restaurarCard(card);
     corpo.appendChild(tr);
 
+    // ---- descricao (abaixo do titulo, acima das etapas) ----
+    if (card.descricao) {
+      const trDesc = document.createElement("tr");
+      trDesc.className = "linha-desc";
+      trDesc.innerHTML = `<td colspan="6" class="col-desc"><span class="desc-rotulo">Descrição:</span> ${escapeHtml(card.descricao)}</td>`;
+      corpo.appendChild(trDesc);
+    }
+
     // ---- linhas das etapas ----
     (card.subtarefas || []).forEach((sub, i) => {
       const janela = janelas.get(sub.id);

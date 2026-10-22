@@ -173,6 +173,17 @@
 }
 .btn-restaurar:hover{border-color:var(--vr-orange); background:var(--vr-gray-light);}
 
+/* Descricao da tarefa: logo abaixo do titulo, antes das etapas */
+.linha-desc td{
+  border-top:none;
+  padding:0 14px 8px 34px;
+  font-size:12px;
+  color:var(--vr-text);
+  white-space:normal;
+  word-break:break-word;
+}
+.linha-desc .desc-rotulo{font-weight:700; opacity:0.75;}
+
 .col-prazo.atrasada{color:var(--danger); font-weight:700;}
 
 /* ---------- Linhas das etapas ---------- */
