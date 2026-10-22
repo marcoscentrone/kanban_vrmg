@@ -284,7 +284,12 @@ function cardsVisiveis(colunaId) {
   // responsavel afina ainda mais (para o usuario comum ele fica travado nele).
   return cardsDaColuna(colunaId).filter((c) => {
     if ((c.departamento || "") !== filtroDepartamento) return false;
-    if (filtroResponsavel && (c.responsavelEmail || "") !== filtroResponsavel) return false;
+    // Ao filtrar por um responsavel, as tarefas SEM responsavel continuam
+    // aparecendo - elas sao o "pool" visivel a todos do departamento.
+    if (filtroResponsavel) {
+      const resp = c.responsavelEmail || "";
+      if (resp !== filtroResponsavel && resp !== "") return false;
+    }
     return true;
   });
 }
