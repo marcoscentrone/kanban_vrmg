@@ -744,12 +744,14 @@ function renderSubtarefas(card, col) {
       const info = ESTADO_INFO[sub.estado] || ESTADO_INFO.pendente;
       const cor = cores.get(sub.id);
       const estilo = cor ? ` style="--cor-sub:${cor}"` : "";
-      const dica = tituloSubtarefa(sub, janelas.get(sub.id));
+      const coment = (sub.comentario || "").trim();
+      const dica = tituloSubtarefa(sub, janelas.get(sub.id)) + (coment ? ` · 💬 ${coment}` : "");
       return `<li class="sub ${sub.estado}${cor ? " colorida" : ""}" data-sub="${escapeHtml(sub.id)}"
                   title="${escapeHtml(dica)}"${estilo}>
         <span class="sub-icone">${info.icone}</span>
         <span class="sub-num">1-${i + 1}</span>
         <span class="sub-nome">${escapeHtml(sub.nome)}</span>
+        ${coment ? '<span class="sub-coment-flag">&#128172;</span>' : ""}
       </li>`;
     })
     .join("");
@@ -978,7 +980,7 @@ function aplicarFluxoDoDepartamento() {
 function setModalSomenteLeitura(ro) {
   const modal = overlay.querySelector(".modal");
   modal.querySelectorAll("input, textarea, select").forEach((el) => { el.disabled = ro; });
-  modal.querySelectorAll(".sub-estado, .sub-remover, .sub-mover").forEach((b) => { b.disabled = ro; });
+  modal.querySelectorAll(".sub-estado, .sub-remover, .sub-mover, .sub-comentar").forEach((b) => { b.disabled = ro; });
   $("saveBtn").style.display = ro ? "none" : "";
   const addBox = $("addSubBox");
   if (addBox) addBox.style.display = ro ? "none" : "";
@@ -1183,6 +1185,11 @@ function renderSubsModal() {
   box.innerHTML = "";
   subsRascunho.forEach((sub, i) => {
     const info = ESTADO_INFO[sub.estado] || ESTADO_INFO.pendente;
+    const temComent = !!(sub.comentario && sub.comentario.trim());
+
+    const item = document.createElement("div");
+    item.className = "sub-item";
+
     const linha = document.createElement("div");
     linha.className = "sub-linha " + sub.estado;
     linha.innerHTML = `
@@ -1191,8 +1198,16 @@ function renderSubsModal() {
       <input class="sub-input" maxlength="40" value="${escapeHtml(sub.nome)}">
       <button type="button" class="sub-mover" data-dir="-1" title="Subir" ${i === 0 ? "disabled" : ""}>&#8593;</button>
       <button type="button" class="sub-mover" data-dir="1" title="Descer" ${i === subsRascunho.length - 1 ? "disabled" : ""}>&#8595;</button>
+      <button type="button" class="sub-comentar${temComent ? " tem" : ""}" title="Comentário (até 50 caracteres)">&#128172;</button>
       <button type="button" class="sub-remover" title="Remover">&times;</button>
     `;
+
+    const comentBox = document.createElement("div");
+    comentBox.className = "sub-comentario";
+    comentBox.style.display = temComent ? "flex" : "none";
+    comentBox.innerHTML =
+      `<input class="sub-coment-input" maxlength="50" placeholder="Comentário (até 50 caracteres)" value="${escapeHtml(sub.comentario || "")}">`;
+
     linha.querySelector(".sub-estado").onclick = () => {
       subsRascunho[i].estado = proximoEstado(subsRascunho[i].estado);
       renderSubsModal();
@@ -1203,11 +1218,23 @@ function renderSubsModal() {
     linha.querySelectorAll(".sub-mover").forEach((b) => {
       b.onclick = () => moverSubRascunho(i, Number(b.dataset.dir));
     });
+    linha.querySelector(".sub-comentar").onclick = () => {
+      const escondido = comentBox.style.display === "none";
+      comentBox.style.display = escondido ? "flex" : "none";
+      if (escondido) comentBox.querySelector("input").focus();
+    };
+    comentBox.querySelector("input").oninput = (e) => {
+      subsRascunho[i].comentario = e.target.value.slice(0, 50);
+      linha.querySelector(".sub-comentar").classList.toggle("tem", !!subsRascunho[i].comentario.trim());
+    };
     linha.querySelector(".sub-remover").onclick = () => {
       subsRascunho.splice(i, 1);
       renderSubsModal();
     };
-    box.appendChild(linha);
+
+    item.appendChild(linha);
+    item.appendChild(comentBox);
+    box.appendChild(item);
   });
 }
 

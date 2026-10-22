@@ -679,6 +679,38 @@ a.btn-ghost{text-decoration:none; display:inline-block;}
 .sub-mover:hover:not(:disabled){border-color:var(--vr-orange); color:var(--vr-orange);}
 .sub-mover:disabled{opacity:0.35; cursor:default;}
 
+/* Comentario por etapa (balaozinho entre o "descer" e o "remover") */
+.sub-item{display:flex; flex-direction:column; gap:4px; margin-bottom:6px;}
+.sub-comentar{
+  flex-shrink:0;
+  width:24px; height:24px;
+  border:none;
+  background:transparent;
+  color:var(--vr-text);
+  font-size:14px;
+  line-height:1;
+  border-radius:4px;
+  cursor:pointer;
+  opacity:0.55;
+}
+.sub-comentar:hover:not(:disabled){opacity:1; background:var(--vr-gray-light);}
+.sub-comentar.tem{opacity:1; color:var(--vr-orange);}
+.sub-comentar:disabled{opacity:0.3; cursor:default;}
+.sub-comentario{display:flex; padding:0 0 2px 34px;}
+.sub-comentario .sub-coment-input{
+  flex:1 1 auto;
+  min-width:0;
+  padding:5px 8px;
+  border:1.5px solid var(--vr-gray-light);
+  border-radius:5px;
+  font-family:'Montserrat',sans-serif;
+  font-size:12px;
+  background:var(--vr-white);
+}
+.sub-comentario .sub-coment-input:focus{outline:none; border-color:var(--vr-orange);}
+/* marcador de que a etapa tem comentario, no card do quadro */
+.sub-coment-flag{margin-left:4px; font-size:10px; opacity:0.85;}
+
 /* Botao de saida do modal quando a tarefa esta na ultima coluna: "Finalizar" */
 .link-btn.finalizar{color:var(--live-green); font-weight:600;}
 .campo-finalizado{

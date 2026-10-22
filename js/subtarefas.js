@@ -43,7 +43,8 @@ export function lerSubtarefas(dados) {
     .map((s, i) => ({
       id: typeof s.id === "string" && s.id ? s.id : `s${i + 1}`,
       nome: s.nome.trim(),
-      estado: ESTADOS.includes(s.estado) ? s.estado : "pendente"
+      estado: ESTADOS.includes(s.estado) ? s.estado : "pendente",
+      comentario: typeof s.comentario === "string" ? s.comentario.slice(0, 50) : ""
     }))
     .filter((s) => s.nome)
     .slice(0, MAX_SUBTAREFAS);
