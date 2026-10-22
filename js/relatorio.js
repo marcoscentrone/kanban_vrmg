@@ -466,6 +466,14 @@ function render() {
         <td class="col-prazo">${escapeHtml(prazo)}</td>
       `;
       corpo.appendChild(linha);
+
+      // comentario da etapa, logo abaixo dela, sem separacao
+      if (sub.comentario && sub.comentario.trim()) {
+        const linhaC = document.createElement("tr");
+        linhaC.className = "linha-sub-coment";
+        linhaC.innerHTML = `<td colspan="6" class="col-sub-coment">${escapeHtml(sub.comentario)}</td>`;
+        corpo.appendChild(linhaC);
+      }
     });
   });
 
