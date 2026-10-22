@@ -42,6 +42,7 @@ export const ACOES = {
   excluiu: "excluiu a tarefa",
   finalizou: "finalizou a tarefa",
   cancelou: "cancelou a tarefa",
+  restaurou: "restaurou a tarefa",
   sub_add: "adicionou a etapa",
   sub_del: "removeu a etapa",
   sub_nome: "renomeou a etapa",
@@ -103,6 +104,10 @@ export function registrarFinalizacao(card, usuario) {
 
 export function registrarCancelamento(card, usuario) {
   return gravar([{ ...base(card, usuario), acao: "cancelou", alvo: "tarefa", campo: "", de: card.titulo || "", para: "" }]);
+}
+
+export function registrarRestauracao(card, usuario) {
+  return gravar([{ ...base(card, usuario), acao: "restaurou", alvo: "tarefa", campo: "", de: "", para: card.titulo || "" }]);
 }
 
 // Compara antes/depois e gera um registro por campo que mudou.
@@ -214,6 +219,7 @@ export function descrever(reg) {
     case "excluiu":    return `excluiu a tarefa "${reg.de}"`;
     case "finalizou":  return `finalizou a tarefa "${reg.de}"`;
     case "cancelou":   return `cancelou a tarefa "${reg.de}"`;
+    case "restaurou":  return `restaurou a tarefa "${reg.para}"`;
     case "sub_add":    return `adicionou a etapa "${reg.para}"`;
     case "sub_del":    return `removeu a etapa "${reg.de}"`;
     case "sub_nome":   return `renomeou a etapa "${reg.de}" para "${reg.para}"`;

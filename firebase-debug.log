@@ -1,0 +1,46 @@
+[debug] [2026-10-22T11:22:22.961Z] ----------------------------------------------------------------------
+[debug] [2026-10-22T11:22:22.966Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Marcos_VRBH\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only firestore:rules,hosting --project kanbanvr --non-interactive
+[debug] [2026-10-22T11:22:22.966Z] CLI Version:   15.34.0
+[debug] [2026-10-22T11:22:22.966Z] Platform:      win32
+[debug] [2026-10-22T11:22:22.966Z] Node Version:  v24.22.0
+[debug] [2026-10-22T11:22:22.966Z] Detected Agent: claude-code_2-1-306_agent
+[debug] [2026-10-22T11:22:22.966Z] Time:          Thu Oct 22 2026 08:22:22 GMT-0300 (Horário Padrão de Brasília)
+[debug] [2026-10-22T11:22:22.967Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-10-22T11:22:55.160Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-10-22T11:22:55.160Z] > authorizing via signed-in user (marcos.centrone@vrbelohorizonte.com.br)
+[debug] [2026-10-22T11:22:55.160Z] [iam] checking project kanbanvr for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-10-22T11:22:55.169Z] Checked if tokens are valid: false, expires at: 1792618438826
+[debug] [2026-10-22T11:22:55.169Z] Checked if tokens are valid: false, expires at: 1792618438826
+[debug] [2026-10-22T11:22:55.169Z] > refreshing access token with scopes: []
+[debug] [2026-10-22T11:22:55.171Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-10-22T11:22:55.171Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-10-22T11:22:55.401Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 400
+[debug] [2026-10-22T11:22:55.401Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-10-22T11:22:55.402Z] [iam] error while checking permissions, command may fail: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-10-22T11:22:55.402Z] Checked if tokens are valid: false, expires at: 1792618438826
+[debug] [2026-10-22T11:22:55.402Z] Checked if tokens are valid: false, expires at: 1792618438826
+[debug] [2026-10-22T11:22:55.402Z] > refreshing access token with scopes: []
+[debug] [2026-10-22T11:22:55.403Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-10-22T11:22:55.403Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-10-22T11:22:55.507Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 400
+[debug] [2026-10-22T11:22:55.507Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-10-22T11:22:55.507Z] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[error] 
+[error] Error: Assertion failed: resolving hosting target of a site with no site name or target name. This should have caused an error earlier

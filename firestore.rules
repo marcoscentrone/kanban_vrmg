@@ -337,18 +337,21 @@ service cloud.firestore {
     // cards_cancelados : canceladas (antigo "Excluir").
     // Imutaveis depois de criadas; so admin apaga (limpeza). O create exige que
     // quem grava pudesse arquivar a tarefa (mesma regra de mexer nela).
+    // delete serve tanto para a limpeza (admin) quanto para a RESTAURACAO:
+    // quem podia arquivar a tarefa tambem pode tira-la do arquivo (o cliente
+    // recria em kanban_cards no mesmo lote).
     match /cards_finalizados/{id} {
       allow read:   if podeLerArquivo();
       allow create: if doDominio() && podeArquivar(request.resource.data);
       allow update: if false;
-      allow delete: if souAdmin();
+      allow delete: if souAdmin() || (doDominio() && podeArquivar(resource.data));
     }
 
     match /cards_cancelados/{id} {
       allow read:   if podeLerArquivo();
       allow create: if doDominio() && podeArquivar(request.resource.data);
       allow update: if false;
-      allow delete: if souAdmin();
+      allow delete: if souAdmin() || (doDominio() && podeArquivar(resource.data));
     }
 
     // Qualquer outra colecao continua bloqueada.

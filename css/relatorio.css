@@ -160,6 +160,18 @@
   padding:2px 8px;
   border-radius:4px;
 }
+.btn-restaurar{
+  margin-left:8px;
+  font-size:10.5px;
+  font-weight:600;
+  border:1px solid var(--vr-gray-light);
+  background:var(--vr-white);
+  color:var(--vr-orange);
+  border-radius:4px;
+  padding:1px 7px;
+  cursor:pointer;
+}
+.btn-restaurar:hover{border-color:var(--vr-orange); background:var(--vr-gray-light);}
 
 .col-prazo.atrasada{color:var(--danger); font-weight:700;}
 

@@ -21,8 +21,9 @@ import {
   coresDasSubtarefas, diasAteOFim
 } from "./cronograma.js";
 import {
-  collection, onSnapshot, query, where
+  collection, onSnapshot, query, where, doc, writeBatch, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { registrarRestauracao } from "./auditoria.js";
 
 /* -------------------------------------------------------------------------- */
 /* Estado                                                                     */
@@ -113,6 +114,8 @@ function mapCard(d, situacao) {
     fimPrevisto: typeof dados.fimPrevisto === "string" ? dados.fimPrevisto : "",
     subtarefas: lerSubtarefas(dados),
     criadoPor: (dados.criadoPor || "").toLowerCase(),
+    criadoEm: dados.criadoEm || null,
+    finalizadoEm: dados.finalizadoEm || null,
     situacao
   };
 }
@@ -263,9 +266,11 @@ function cardsFiltrados() {
   const dep = $("filtroDep").value;
   const lista = $("filtroLista").value;
   const resp = $("filtroResp").value;
+  const sit = $("filtroSituacao") ? $("filtroSituacao").value : "";
 
   return cards
     .filter((c) => c.departamento === dep)
+    .filter((c) => !sit || (c.situacao || "ativa") === sit)
     .filter((c) => !lista || c.coluna === lista)
     .filter((c) => {
       if (!resp) return true;
@@ -304,6 +309,58 @@ function estadoTag(card, ehFinal) {
   if (card.situacao === "finalizada") return '<span class="tag-ok">finalizada</span>';
   if (card.situacao === "cancelada") return '<span class="tag-cancel">cancelada</span>';
   return ehFinal ? '<span class="tag-ok">concluída</span>' : "";
+}
+
+// Quem pode restaurar uma tarefa arquivada: mesma regra de quem podia arquivar
+// (admin / ve-tudo / supervisor do depto / responsavel / dono).
+function podeRestaurar(card) {
+  if (!usuario || card.situacao === "ativa") return false;
+  const p = usuario.permissao;
+  if (p.admin || p.veTudo) return true;
+  if (p.supervisor && (p.departamentos || []).includes(card.departamento)) return true;
+  if (card.responsavelEmail && card.responsavelEmail === usuario.email) return true;
+  if (card.criadoPor && card.criadoPor === usuario.email) return true;
+  return false;
+}
+
+// Devolve a tarefa do arquivo para o quadro (kanban_cards), num lote atomico.
+async function restaurarCard(card) {
+  if (!podeRestaurar(card)) return;
+  if (!confirm(`Restaurar "${card.titulo}" para o quadro?`)) return;
+
+  const colArquivo = card.situacao === "finalizada" ? COLECAO_FINALIZADOS : COLECAO_CANCELADOS;
+  try {
+    const lote = writeBatch(db);
+    lote.set(doc(db, COLECAO_CARDS, card.id), {
+      titulo: card.titulo || "",
+      descricao: card.descricao || "",
+      coluna: card.coluna || "",
+      departamento: card.departamento || "",
+      responsavel: card.responsavel || "",
+      responsavelEmail: card.responsavelEmail || "",
+      prioridade: card.prioridade || "media",
+      inicioPrevisto: card.inicioPrevisto || "",
+      fimPrevisto: card.fimPrevisto || "",
+      finalizadoEm: card.finalizadoEm || null,
+      criadoPor: card.criadoPor || "",
+      criadoEm: card.criadoEm || null,
+      subtarefas: card.subtarefas || [],
+      atualizadoEm: serverTimestamp()
+    });
+    lote.delete(doc(db, colArquivo, card.id));
+    await lote.commit();
+    registrarRestauracao(card, { email: usuario.email, nome: nomeDoEmail(usuario.email) });
+    setStatus(`"${card.titulo}" voltou para o quadro.`);
+  } catch (e) {
+    console.error("[relatorio] falha ao restaurar:", e);
+    setStatus("Não foi possível restaurar a tarefa.", true);
+  }
+}
+
+// "fulano@..." -> "Fulano" (para a autoria do registro de auditoria).
+function nomeDoEmail(email) {
+  return (email || "").split("@")[0].split(/[._-]+/).filter(Boolean)
+    .map((p) => p[0].toUpperCase() + p.slice(1)).join(" ");
 }
 
 function render() {
@@ -351,6 +408,9 @@ function render() {
           <strong>${escapeHtml(card.titulo)}</strong>
           ${total ? `<span class="etapas-resumo">${feitas}/${total} etapas</span>` : ""}
           ${card.responsavel ? `<span class="resp">${escapeHtml(card.responsavel)}</span>` : ""}
+          ${(card.situacao && card.situacao !== "ativa" && podeRestaurar(card))
+            ? `<button class="btn-restaurar" title="Restaurar para o quadro">↩ restaurar</button>`
+            : ""}
         </div>
       </td>
       <td class="col-estado">${estadoTag(card, ehFinal)}</td>
@@ -359,6 +419,8 @@ function render() {
       <td class="col-data">${escapeHtml(formatarDataISO(card.fimPrevisto) || "—")}</td>
       <td class="col-prazo${atrasada ? " atrasada" : ""}">${escapeHtml(textoPrazoTarefa(card, ehFinal))}</td>
     `;
+    const bR = tr.querySelector(".btn-restaurar");
+    if (bR) bR.onclick = () => restaurarCard(card);
     corpo.appendChild(tr);
 
     // ---- linhas das etapas ----
@@ -463,6 +525,7 @@ $("filtroDep").addEventListener("change", () => {
 });
 $("filtroLista").addEventListener("change", render);
 $("filtroResp").addEventListener("change", render);
+if ($("filtroSituacao")) $("filtroSituacao").addEventListener("change", render);
 $("filtroDe").addEventListener("change", render);
 $("filtroAte").addEventListener("change", render);
 $("limparPeriodo").addEventListener("click", () => {
