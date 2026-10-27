@@ -1496,6 +1496,45 @@ filtroRespSel.addEventListener("change", () => {
   render();
 });
 
+// Auto-scroll da janela durante o arraste de um card: quando o cursor chega
+// perto do topo ou do rodape da tela, a pagina rola junto, para alcancar
+// colunas/tarefas fora da vista. So vale enquanto um card esta sendo arrastado.
+let autoScrollRAF = null;
+let autoScrollVel = 0;
+
+function pararAutoScroll() {
+  if (autoScrollRAF) { cancelAnimationFrame(autoScrollRAF); autoScrollRAF = null; }
+  autoScrollVel = 0;
+}
+
+function loopAutoScroll() {
+  if (!autoScrollVel) { autoScrollRAF = null; return; }
+  window.scrollBy(0, autoScrollVel);
+  autoScrollRAF = requestAnimationFrame(loopAutoScroll);
+}
+
+document.addEventListener("dragover", (e) => {
+  if (!arrastando) return;
+  const margem = 90;   // zona sensivel no topo/rodape (px)
+  const velMax = 22;   // velocidade maxima (px por quadro)
+  const y = e.clientY;
+  const h = window.innerHeight;
+
+  if (y < margem) {
+    autoScrollVel = -Math.ceil(velMax * (1 - y / margem));
+  } else if (y > h - margem) {
+    autoScrollVel = Math.ceil(velMax * (1 - (h - y) / margem));
+  } else {
+    autoScrollVel = 0;
+  }
+
+  if (autoScrollVel && !autoScrollRAF) autoScrollRAF = requestAnimationFrame(loopAutoScroll);
+  else if (!autoScrollVel) pararAutoScroll();
+});
+
+document.addEventListener("dragend", pararAutoScroll);
+document.addEventListener("drop", pararAutoScroll);
+
 // O contador de dias muda com o tempo, nao com os dados: sem isto uma aba
 // deixada aberta mostraria "sai em 3 dias" para sempre.
 setInterval(render, 60 * 60 * 1000);
