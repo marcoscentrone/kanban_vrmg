@@ -1202,7 +1202,7 @@ function renderSubsModal() {
       <input class="sub-input" maxlength="40" value="${escapeHtml(sub.nome)}">
       <button type="button" class="sub-mover" data-dir="-1" title="Subir" ${i === 0 ? "disabled" : ""}>&#8593;</button>
       <button type="button" class="sub-mover" data-dir="1" title="Descer" ${i === subsRascunho.length - 1 ? "disabled" : ""}>&#8595;</button>
-      <button type="button" class="sub-comentar${temComent ? " tem" : ""}" title="Comentário (até 50 caracteres)">&#128172;</button>
+      <button type="button" class="sub-comentar${temComent ? " tem" : ""}" title="Comentário (até 100 caracteres)">&#128172;</button>
       <button type="button" class="sub-remover" title="Remover">&times;</button>
     `;
 
@@ -1210,7 +1210,7 @@ function renderSubsModal() {
     comentBox.className = "sub-comentario";
     comentBox.style.display = temComent ? "flex" : "none";
     comentBox.innerHTML =
-      `<input class="sub-coment-input" maxlength="50" placeholder="Comentário (até 50 caracteres)" value="${escapeHtml(sub.comentario || "")}">`;
+      `<input class="sub-coment-input" maxlength="100" placeholder="Comentário (até 100 caracteres)" value="${escapeHtml(sub.comentario || "")}">`;
 
     linha.querySelector(".sub-estado").onclick = () => {
       subsRascunho[i].estado = proximoEstado(subsRascunho[i].estado);
@@ -1228,7 +1228,7 @@ function renderSubsModal() {
       if (escondido) comentBox.querySelector("input").focus();
     };
     comentBox.querySelector("input").oninput = (e) => {
-      subsRascunho[i].comentario = e.target.value.slice(0, 50);
+      subsRascunho[i].comentario = e.target.value.slice(0, 100);
       linha.querySelector(".sub-comentar").classList.toggle("tem", !!subsRascunho[i].comentario.trim());
     };
     linha.querySelector(".sub-remover").onclick = () => {
